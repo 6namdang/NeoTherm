@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "BurnX",
+    "slug": "BurnX",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "burnx",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F6F8FA",
+      "dark": {
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-splash-screen",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow BurnX to record brief voice samples for Voice Check-In as part of your care program."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow BurnX to choose a wound photo from your library for your care program and longitudinal monitoring.",
+          "cameraPermission": "Allow BurnX to take photos of your wound for your care program and longitudinal monitoring."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
