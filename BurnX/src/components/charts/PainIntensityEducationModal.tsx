@@ -90,7 +90,7 @@ export function PainIntensityEducationModal({
               About PROMIS Pain Intensity 3a
             </Text>
             <Text style={[typography.caption, styles.modalSub]}>
-              Your home T-score averages three pain intensity prompts; tap the chart area elsewhere for trend view of reported average intensity over time (0 to 4 scale).
+              Your home T-score averages three pain intensity prompts. Tap the chart area for average pain history over time (0 to 4 scale).
             </Text>
           </View>
           <Pressable
@@ -163,7 +163,7 @@ export function PainIntensityEducationModal({
               ) : null}
               <Text style={[typography.body, styles.snapshotBody]}>
                 All three PROMIS Pain Intensity prompts need valid categorical
-                selections before BurnX can publish your T-score. If you believe your
+                selections before NeoTherm can publish your T-score. If you believe your
                 answers were complete but scoring still fails, contact your clinician
                 before acting on provisional numbers alone.
               </Text>
@@ -188,7 +188,7 @@ export function PainIntensityEducationModal({
 
           <Text style={[typography.micro, styles.sectionEyebrow]}>Disclaimer</Text>
           <Text style={[typography.caption, styles.para]}>
-            None of BurnX PROMIS overlays replace clinical judgement. Pain metrics fluctuate naturally; escalate concerning patterns with professionals who supervise your pharmacologic therapy and escalation plans.
+            None of NeoTherm PROMIS overlays replace clinical judgement. Pain metrics fluctuate naturally; escalate concerning patterns with professionals who supervise your pharmacologic therapy and escalation plans.
           </Text>
 
           <Text style={[typography.micro, styles.sectionEyebrow]}>Reference</Text>

@@ -1,19 +1,46 @@
-import { getMyFormResponses } from "./api";
+export { burnInjuryDayNumber, formatBurnInjuryDayLabel } from "./burn-injury-day";
+export { formatProgramDayLabel, programDayNumber } from "./program-day";
+
+type FormResponse = {
+  created_at?: string | null;
+  answers?: Record<string, unknown> | null;
+};
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
+function sortFormResponsesNewestFirst(
+  responses: readonly FormResponse[],
+): FormResponse[] {
+  return [...responses].sort(
+    (a, b) =>
+      Date.parse(String(b.created_at ?? 0)) -
+      Date.parse(String(a.created_at ?? 0)),
+  );
+}
+
 export async function getBurnInjuryDate(): Promise<string | null> {
-  const responses = await getMyFormResponses("burn_intake_v1", 1);
-  if (responses.length === 0) return null;
-  const raw = responses[0]?.answers?.injury_date;
+  const { getMyFormResponses } = await import("./api");
+  const responses = await getMyFormResponses("burn_intake_v1", 10);
+  const latest = sortFormResponsesNewestFirst(responses)[0];
+  const raw = latest?.answers?.injury_date;
   return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+}
+
+/** Latest `burn_intake_v1` submission time (onboarding complete). */
+export async function getOnboardingSubmittedAt(): Promise<string | null> {
+  const { getMyFormResponses } = await import("./api");
+  const responses = await getMyFormResponses("burn_intake_v1", 10);
+  const latest = sortFormResponsesNewestFirst(responses)[0];
+  const at = latest?.created_at;
+  return typeof at === "string" && at.trim() !== "" ? at.trim() : null;
 }
 
 /** Latest completion timestamp for a given `form_id` (patient-scoped via GET, newest first). */
 export async function getLastCompletion(formId: string): Promise<string | null> {
-  const responses = await getMyFormResponses(formId, 1);
-  if (responses.length === 0) return null;
-  const at = responses[0]?.created_at;
+  const { getMyFormResponses } = await import("./api");
+  const responses = await getMyFormResponses(formId, 10);
+  const latest = sortFormResponsesNewestFirst(responses)[0];
+  const at = latest?.created_at;
   return typeof at === "string" && at.trim() !== "" ? at.trim() : null;
 }
 

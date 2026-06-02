@@ -58,3 +58,5 @@ export function scoreGad7(answers: ScaleAnswers): Gad7ScoreResult {
 export type Gad7DashboardSnapshot = {
   createdAtIso: string;
 } & Gad7ScoreResult;
+
+export type Gad7DashboardPoint = Gad7DashboardSnapshot;

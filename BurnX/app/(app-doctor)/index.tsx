@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router, type Href } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,6 +22,7 @@ import { AssistiveClinicalNotice } from "../../src/components/AssistiveClinicalN
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
 import { DashboardWelcomeHeader } from "../../src/components/DashboardWelcomeHeader";
+import { AccountSidePanel } from "../../src/components/AccountSidePanel";
 import { EmptyState } from "../../src/components/EmptyState";
 import { Screen } from "../../src/components/Screen";
 import { useToast } from "../../src/components/ToastProvider";
@@ -46,6 +48,12 @@ import { exportPatientQuestionnairePdf } from "../../src/lib/doctor-patient-pdf-
 import { formatRelativePast } from "../../src/lib/format-relative-past";
 import { bxLog } from "../../src/lib/debug-log";
 import { usePostAuth } from "../../src/lib/post-auth-context";
+import {
+  resolveLastVisitDaysAgo,
+  resolveWelcomeFacility,
+  resolveWelcomeRole,
+} from "../../src/lib/welcome-meta";
+import { useSession } from "../../src/lib/auth-context";
 import { useDoctorPatients } from "../../src/state/doctor-patients-context";
 import { colors } from "../../src/theme/colors";
 import { fontFamily } from "../../src/theme/fontFamily";
@@ -142,6 +150,7 @@ function pillForActivity(bucket: ActivityBucket): {
 export default function DoctorDashboardScreen() {
   const { showToast } = useToast();
   const { me } = usePostAuth();
+  const { signOut } = useSession();
   const {
     patients,
     loading,
@@ -160,10 +169,22 @@ export default function DoctorDashboardScreen() {
       ? me.name.trim()
       : null;
 
+  const welcomeFacility = resolveWelcomeFacility(me);
+  const welcomeRole = resolveWelcomeRole(me, "clinician");
+  const lastVisitDaysAgo = useMemo(
+    () =>
+      resolveLastVisitDaysAgo(
+        me,
+        lastFetchedAt !== null ? [new Date(lastFetchedAt).toISOString()] : [],
+      ),
+    [lastFetchedAt, me],
+  );
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detailByPatient, setDetailByPatient] = useState<Record<string, DetailState>>({});
   const [instrumentModal, setInstrumentModal] = useState<InstrumentModalState>(null);
   const [pdfExportPatientId, setPdfExportPatientId] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const patientDetailTicketRef = useRef(0);
   const rosterSeedRef = useRef(false);
 
@@ -442,7 +463,7 @@ export default function DoctorDashboardScreen() {
       <EmptyState
         icon="people-outline"
         title="No patients on file"
-        subtitle="When patients enroll under your hospital in BurnX, they appear here with injury context and programme activity."
+        subtitle="When patients enroll under your hospital in NeoTherm, they appear here with injury context and programme activity."
       />
     );
   };
@@ -458,7 +479,14 @@ export default function DoctorDashboardScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <>
-            <DashboardWelcomeHeader name={displayName} />
+            <DashboardWelcomeHeader
+              facility={welcomeFacility}
+              lastVisitDaysAgo={lastVisitDaysAgo}
+              name={displayName}
+              role={welcomeRole}
+              unreadCount={0}
+              onAccountPress={() => setAccountOpen(true)}
+            />
             <Text style={[styles.pageTitle, typography.eyebrow]}>Clinical overview</Text>
             <Text style={[styles.pageSubtitle, typography.body]}>
               One place to monitor your hospital cohort: engagement, injury context, and questionnaire
@@ -467,7 +495,7 @@ export default function DoctorDashboardScreen() {
             <DoctorKpiStrip summary={rosterSummary} />
             <AssistiveClinicalNotice
               confidenceLabel="Oversight support"
-              helperText="BurnX summarises submitted questionnaires only. Always confirm against source documentation and unit policy before clinical decisions."
+              helperText="NeoTherm summarises submitted questionnaires only. Always confirm against source documentation and unit policy before clinical decisions."
             />
             <View style={styles.sectionHead}>
               <Text style={[styles.sectionTitle, typography.title]}>Roster & programmes</Text>
@@ -510,6 +538,27 @@ export default function DoctorDashboardScreen() {
         onClose={() => setInstrumentModal(null)}
         submissions={instrumentModal?.submissions ?? []}
         visible={instrumentModal !== null}
+      />
+      <AccountSidePanel
+        displayName={displayName ?? "Clinician"}
+        facility={welcomeFacility}
+        role={welcomeRole}
+        roleLabel="Clinician account"
+        unreadCount={0}
+        visible={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        onNotifications={() => {
+          setAccountOpen(false);
+          router.push("/notifications" as Href);
+        }}
+        onSettings={() => {
+          setAccountOpen(false);
+          router.push("/settings" as Href);
+        }}
+        onSignOut={() => {
+          setAccountOpen(false);
+          void signOut();
+        }}
       />
     </Screen>
   );

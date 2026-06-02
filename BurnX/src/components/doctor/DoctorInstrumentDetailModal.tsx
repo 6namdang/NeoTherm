@@ -12,7 +12,7 @@ import {
   UIManager,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FormResponse } from "../../lib/api";
 import { summarizeFormResponseForScoreboard } from "../../lib/doctor-patient-scoreboard";
 import { formatClinicianAnswerRows } from "../../lib/doctor-form-answer-format";
@@ -80,6 +80,7 @@ export function DoctorInstrumentDetailModal({
   formId,
   submissions,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const visits = useMemo(() => {
     const deduped = dedupeFormResponses(submissions);
     return [...deduped].sort(
@@ -112,9 +113,14 @@ export function DoctorInstrumentDetailModal({
     >
       <View style={styles.root}>
         <BlurView intensity={88} tint="light" style={styles.blurHeader}>
-          <SafeAreaView edges={["top"]} style={styles.headerSafe}>
+          <View
+            style={[
+              styles.headerSafe,
+              { paddingTop: Math.max(insets.top, Platform.OS === "ios" ? 8 : spacing.sm) },
+            ]}
+          >
             <View style={styles.headerBar}>
-              <View style={styles.headerSide}>
+              <View style={styles.headerLeading}>
                 <Pressable
                   accessibilityHint="Dismisses questionnaire detail"
                   accessibilityLabel="Done"
@@ -129,16 +135,17 @@ export function DoctorInstrumentDetailModal({
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
+                pointerEvents="none"
                 style={[styles.headerCenterTitle, typography.caption]}
               >
                 Responses
               </Text>
-              <View style={styles.headerSide} />
             </View>
-          </SafeAreaView>
+          </View>
         </BlurView>
 
         <ScrollView
+          style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -275,32 +282,47 @@ const styles = StyleSheet.create({
   blurHeader: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    zIndex: 10,
+    ...Platform.select({
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   headerSafe: {
     paddingBottom: spacing.sm,
   },
   headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
     minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
   },
-  headerSide: {
-    width: 72,
-    alignItems: "flex-start",
+  headerLeading: {
+    position: "absolute",
+    left: spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    zIndex: 2,
+    minWidth: 72,
+    maxWidth: "42%",
   },
   headerCenterTitle: {
     color: colors.textMuted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     fontFamily: fontFamily.semiBold,
+    textAlign: "center",
+    alignSelf: "center",
+    paddingHorizontal: 88,
+  },
+  scroll: {
+    flex: 1,
   },
   doneBtn: {
     minHeight: 44,
-    minWidth: 44,
     justifyContent: "center",
-    paddingHorizontal: spacing.sm,
+    paddingRight: spacing.sm,
+    alignSelf: "flex-start",
   },
   donePressed: {
     opacity: 0.65,

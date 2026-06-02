@@ -6,7 +6,6 @@ export const PAIN_INTENSITY_FORM: ScaleQuestionnaireForm = {
   name: "Pain intensity",
   description:
     "A short daily snapshot of worst, average, and current pain, for your clinical team.",
-  assignmentDailyLocalStart: { hour: 18, minute: 30 },
   scales: {
     past_pain: {
       labels: [

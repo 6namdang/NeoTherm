@@ -1,5 +1,5 @@
 /**
- * Pittsburgh Sleep Quality Index (PSQI) — component + global scores derived from BurnX
+ * Pittsburgh Sleep Quality Index (PSQI) — component + global scores derived from NeoTherm
  * `psqi_v1` answer keys ({@see PSQI_FORM}). Mirrors publication scoring logic (Buysse et al.);
  * categorical Q1–Q4 buckets are mapped to midpoints consistent with ordinal capture.
  */
@@ -34,6 +34,8 @@ export type PsqiScoreResult = {
   /** True only when Questions 1–9 are answered with valid indices */
   isComplete: boolean;
   missingKeys: string[];
+  /** Estimated actual sleep hours from PSQI question 4. */
+  sleepHours: number | null;
 };
 
 /** Published PSQI component names (for dashboards, tooltips, and education). */
@@ -92,6 +94,12 @@ const PSQI_Q4_SLEEP_HOURS_MIDPOINT = [
   /* <5 h */ 4,
 ] as const;
 
+export function estimatedSleepHoursFromQ4(value: unknown): number | null {
+  const q4 = clipIntAns(value, 3);
+  if (q4 === undefined) return null;
+  return PSQI_Q4_SLEEP_HOURS_MIDPOINT[q4 as 0 | 1 | 2 | 3] ?? null;
+}
+
 function clipIntAns(v: unknown, max: number): number | undefined {
   if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
   const n = Math.trunc(v);
@@ -126,7 +134,7 @@ export function duratScoreFromQ4ordinal(q4: number): number {
   return 3; // Less than 5
 }
 
-/** Q2 ordinal (BurnX scale) matches PSQI “Q2new” latency bins. */
+/** Q2 ordinal (NeoTherm scale) matches PSQI “Q2new” latency bins. */
 function q2newFromOrdinal(q2: number): number {
   return clipIntAns(q2, 3) ?? 0;
 }
@@ -188,6 +196,7 @@ export function hseScoreFromEfficiencyPercent(pct: number): number {
 
 export type PsqiDashboardSubmissionSnapshot = {
   createdAtIso: string;
+  sleepHours: number | null;
 } & Pick<PsqiScoreResult, "total" | "domainById" | "isComplete">;
 
 /** Global clinical band for coloring (literature cutoff PSQI ≤5 “good”). */
@@ -229,6 +238,7 @@ export function computePsqiScores(
       domainById: emptyDomains,
       isComplete: false,
       missingKeys: skip,
+      sleepHours: null,
     };
   }
 
@@ -248,6 +258,7 @@ export function computePsqiScores(
       domainById: emptyDomains,
       isComplete: false,
       missingKeys: [...skip, "invalid_answer_range"],
+      sleepHours: null,
     };
   }
 
@@ -273,6 +284,7 @@ export function computePsqiScores(
         domainById: emptyDomains,
         isComplete: false,
         missingKeys: [...skip, "invalid_answer_range"],
+        sleepHours: null,
       };
     }
     distSum += v;
@@ -294,6 +306,7 @@ export function computePsqiScores(
       domainById: emptyDomains,
       isComplete: false,
       missingKeys: [...skip, "invalid_answer_range"],
+      sleepHours: null,
     };
   }
   const sum89 = q8Clip + q9Clip;
@@ -314,6 +327,7 @@ export function computePsqiScores(
       domainById: emptyDomains,
       isComplete: false,
       missingKeys: [...skip, "invalid_answer_range"],
+      sleepHours: null,
     };
   }
 
@@ -338,5 +352,6 @@ export function computePsqiScores(
     domainById: slices,
     isComplete: true,
     missingKeys: [],
+    sleepHours: estimatedSleepHoursFromQ4(q4),
   };
 }

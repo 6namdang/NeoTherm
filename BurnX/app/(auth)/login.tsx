@@ -35,7 +35,7 @@ export default function LoginScreen() {
           bxLog("screen", "Login back");
           back();
         }}
-        subtitle="Use the email address and password for your BurnX account."
+        subtitle="Use the email address and password for your NeoTherm account."
         title="Welcome back"
       />
 
@@ -60,7 +60,7 @@ export default function LoginScreen() {
 
       <Text style={[styles.policyNote, typography.caption]}>
         By signing in you agree to HIPAA and your hospital policies, and any agreements between
-        your hospital and BurnX (including BAAs where they apply).
+        your hospital and NeoTherm (including BAAs where they apply).
       </Text>
 
       <Button

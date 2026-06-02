@@ -5,7 +5,6 @@ export const COGNITIVE_FUNCTION_FORM: ScaleQuestionnaireForm = {
   id: "cognitive_function_v1",
   name: "Cognitive function",
   description: "Thinking and concentration. The time frame is shown above.",
-  assignmentCadenceDays: 7,
   scales: {
     cognitive_frequency: {
       labels: ["Never", "Rarely", "Sometimes", "Often", "Very often"],

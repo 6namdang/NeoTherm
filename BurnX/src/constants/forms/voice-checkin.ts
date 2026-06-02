@@ -4,8 +4,8 @@ export const VOICE_CHECKIN_FORM: VoiceCheckinForm = {
   id: "voice_checkin_v1",
   name: "Voice Check-In",
   description: "Brief voice recording to track recovery.",
-  assignmentDaysOfWeek: [1, 3, 5],
-  assignmentTimeOfDay: { hour: 10, minute: 0 },
+  /** Mon, Wed, Fri — assignable midnight to midnight local (pilot; no carryover). */
+  assignmentWeeklyFullDays: [1, 3, 5],
   type: "voice",
   tasks: [
     {

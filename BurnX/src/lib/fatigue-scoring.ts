@@ -25,6 +25,9 @@ export type FatigueDashboardSnapshot = {
   createdAtIso: string;
 } & FatigueScore;
 
+/** One scored fatigue submission (used for history charts). */
+export type FatigueDashboardPoint = FatigueDashboardSnapshot;
+
 export const REGULAR_QUESTION_IDS = [
   "fatigue_1",
   "fatigue_2",

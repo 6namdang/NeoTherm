@@ -572,11 +572,6 @@ export function LibreSectionalRadar({
           : "Complete LIBRE to unlock the sectional breakdown."}
       </Text>
 
-      <Text style={[styles.footerNote, typography.caption]}>
-        Orientation only, not a diagnosis. The dashed outline is a fixed midpoint reference (
-        {BASELINE_T}), not your personal historical baseline.
-      </Text>
-
       <LibreDomainBarBreakdownModal
         history={libreSubmissionHistory}
         onClose={() => setModalOpen(false)}
@@ -728,11 +723,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs + 4,
     lineHeight: 18,
     fontWeight: "500",
-  },
-  footerNote: {
-    color: colors.textMuted,
-    lineHeight: 18,
-    fontWeight: "500",
-    marginTop: 2,
   },
 });

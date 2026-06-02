@@ -866,10 +866,10 @@ Enablement gate (`debug-log.ts`):
  ios|android|web   expo start --<plat>
  build        expo export                (production static/web pipeline hook)
  lint         eslint app src aws-config.ts
- proxy:api    node scripts/dev-api-proxy.js    **FILE CURRENTLY MISSING IN REPO — script entry orphan**
+   proxy:api    node scripts/dev-api-proxy.js    local CORS proxy for Expo web development
 ```
 
-Action item tracked in Risks (**§20**).
+Use with **`EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8787`** when running Expo web against a browser that blocks direct API calls.
 
 ---
 
@@ -924,7 +924,7 @@ Animated transitions leverage Reanimated; avoid blocking JS on onboarding large 
 ```
  ID  Severity Area                 Description                                   Mitigation
  --  --------- ----                 -----------                                   ----------
- R-1 MEDIUM    Developer ergonomics Missing dev-api-proxy.js despite npm alias   Remove script OR add compliant proxy+CORS README
+ R-1 RESOLVED  Developer ergonomics Missing dev-api-proxy.js despite npm alias   Added local CORS proxy script
  R-2 MEDIUM    Doctor product       Scaffold shell lacks parity feature depth     Product roadmap prioritisation
  R-3 HIGH      PHI / compliance     Clinical text stored client until POST        Transport-only; organisational BAAs/policies external
  R-4 LOW       Config drift       Cognito hard-coded in aws-config.ts            Extract EXPO_PUBLIC_ env for multi-env

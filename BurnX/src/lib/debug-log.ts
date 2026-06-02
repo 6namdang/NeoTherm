@@ -13,5 +13,5 @@ function loggingEnabled(): boolean {
 /** Prefixed console log for navigation, API, auth, and flows. */
 export function bxLog(tag: string, ...args: unknown[]): void {
   if (!loggingEnabled()) return;
-  console.log(`[BurnX:${tag}]`, ...args);
+  console.log(`[NeoTherm:${tag}]`, ...args);
 }

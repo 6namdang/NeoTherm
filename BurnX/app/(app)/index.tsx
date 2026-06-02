@@ -1,71 +1,88 @@
 import { useFocusEffect } from "@react-navigation/native";
+import { router, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  AppState,
-  type AppStateStatus,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    AppState,
+    RefreshControl,
+    StyleSheet,
+    View,
+    type AppStateStatus,
 } from "react-native";
-import { LibreSectionalRadar } from "../../src/components/charts/LibreSectionalRadar";
-import { PsqiSleepQualityCard } from "../../src/components/charts/PsqiSleepQualityCard";
-import { FatigueScoreCard } from "../../src/components/charts/FatigueScoreCard";
-import { PainIntensityScoreCard } from "../../src/components/charts/PainIntensityScoreCard";
-import { Gad7DashboardCard } from "../../src/components/charts/Gad7DashboardCard";
+import { AccountSidePanel } from "../../src/components/AccountSidePanel";
 import { CognitiveFunctionDashboardCard } from "../../src/components/charts/CognitiveFunctionDashboardCard";
+import { FatigueScoreCard } from "../../src/components/charts/FatigueScoreCard";
+import { Gad7DashboardCard } from "../../src/components/charts/Gad7DashboardCard";
+import { LibreSectionalRadar } from "../../src/components/charts/LibreSectionalRadar";
+import { PainIntensityScoreCard } from "../../src/components/charts/PainIntensityScoreCard";
+import { PsqiSleepQualityCard } from "../../src/components/charts/PsqiSleepQualityCard";
 import {
-  DashboardBottomSections,
-  type CareProgramHomeRow,
+    DashboardBottomSections,
+    type CareProgramHomeRow,
 } from "../../src/components/DashboardBottomSections";
-import { EmaHomeSection } from "../../src/components/EmaHomeSection";
-import { AssistiveClinicalNotice } from "../../src/components/AssistiveClinicalNotice";
+import { DashboardOverviewSection } from "../../src/components/DashboardOverviewSection";
 import { DashboardWelcomeHeader } from "../../src/components/DashboardWelcomeHeader";
-import { MetricCard } from "../../src/components/MetricCard";
+import { MassGeneralHospitalLogo } from "../../src/components/MassGeneralHospitalLogo";
+import { AppleHealthSection } from "../../src/components/health/AppleHealthSection";
 import { Screen } from "../../src/components/Screen";
-import {
-  ALL_FORMS,
-  ASSIGNABLE_CARE_FORM_IDS,
-  getFormById,
-} from "../../src/constants/forms";
+import { VoiceAnalysisDashboardCard } from "../../src/components/voice/VoiceAnalysisDashboardCard";
 import { ALL_EMA_FORMS } from "../../src/constants/ema-forms";
+import { LIBRE_FORM } from "../../src/constants/forms/libre";
+import { LONG_ASSESSMENT_FORM } from "../../src/constants/forms/long-assessment";
 import { getMyFormResponses } from "../../src/lib/api";
-import { resolveEmaAssignmentPending } from "../../src/lib/ema-assignment-eligibility";
-import { resolveAssignmentSnapshot } from "../../src/lib/form-assignment-eligibility";
+import { useSession } from "../../src/lib/auth-context";
 import {
-  coerceAnswersRecord,
-  computeLibreRadarScores,
-  type LibreDashboardSubmissionSnapshot,
-  type LibreRadarDomainSlice,
-} from "../../src/lib/libre-scoring";
+  formatProgramDayLabel,
+  getOnboardingSubmittedAt,
+} from "../../src/lib/burn-date";
 import {
-  computePsqiScores,
-  type PsqiDashboardSubmissionSnapshot,
-} from "../../src/lib/psqi-scoring";
-import {
-  scoreFatigue,
-  type FatigueDashboardSnapshot,
-} from "../../src/lib/fatigue-scoring";
-import {
-  scoreGad7,
-  type Gad7DashboardSnapshot,
-} from "../../src/lib/gad7-scoring";
-import {
-  scoreCognitiveFunction,
-  type CognitiveDashboardSnapshot,
+    scoreCognitiveFunction,
+    type CognitiveDashboardPoint,
+    type CognitiveDashboardSnapshot,
 } from "../../src/lib/cognitive-function-scoring";
 import {
-  painIntensityOrdinalSnapshot,
-  scorePainIntensity,
-  type PainIntensityDashboardPoint,
-  type PainIntensityDashboardSnapshot,
+  loadTodayEmaState,
+  resolveEmaPendingFromState,
+} from "../../src/lib/ema-today-state";
+import {
+    scoreFatigue,
+    type FatigueDashboardPoint,
+    type FatigueDashboardSnapshot,
+} from "../../src/lib/fatigue-scoring";
+import { resolveAssignmentSnapshot } from "../../src/lib/form-assignment-eligibility";
+import { LONG_ASSESSMENT_BUNDLE_ID } from "../../src/lib/care-program-form-groups";
+import { resolveLongAssessmentSnapshot } from "../../src/lib/long-assessment-resolve";
+import {
+    scoreGad7,
+    type Gad7DashboardPoint,
+    type Gad7DashboardSnapshot,
+} from "../../src/lib/gad7-scoring";
+import {
+    coerceAnswersRecord,
+    computeLibreRadarScores,
+    type LibreDashboardSubmissionSnapshot,
+    type LibreRadarDomainSlice,
+} from "../../src/lib/libre-scoring";
+import {
+    painIntensityOrdinalSnapshot,
+    scorePainIntensity,
+    type PainIntensityDashboardPoint,
+    type PainIntensityDashboardSnapshot,
 } from "../../src/lib/pain-intensity-scoring";
 import { usePostAuth } from "../../src/lib/post-auth-context";
+import {
+  resolveLastVisitDaysAgo,
+  resolveWelcomeFacility,
+  resolveWelcomeRole,
+} from "../../src/lib/welcome-meta";
+import {
+    computePsqiScores,
+    estimatedSleepHoursFromQ4,
+    type PsqiDashboardSubmissionSnapshot,
+} from "../../src/lib/psqi-scoring";
 import { colors } from "../../src/theme/colors";
 import { spacing } from "../../src/theme/spacing";
-import { typography } from "../../src/theme/typography";
 
 const EMPTY_LIBRE = computeLibreRadarScores({});
 
@@ -85,8 +102,6 @@ const PAIN_INTENSITY_FETCH_LIMIT = 48;
 const GAD_COGNITIVE_FETCH_LIMIT = 24;
 
 type DashboardData = {
-  openQuestionnaires: number;
-  recentAssignmentTitle: string | null;
   emaRows: CareProgramHomeRow[];
   libreDomains: LibreRadarDomainSlice[];
   libreOverall: number | null;
@@ -94,75 +109,66 @@ type DashboardData = {
   libreSubmissionHistory: LibreDashboardSubmissionSnapshot[];
   psqiSnapshot: PsqiDashboardSubmissionSnapshot | null;
   fatigueSnapshot: FatigueDashboardSnapshot | null;
+  fatigueHistory: FatigueDashboardPoint[];
   gad7Snapshot: Gad7DashboardSnapshot | null;
+  gad7History: Gad7DashboardPoint[];
   cognitiveSnapshot: CognitiveDashboardSnapshot | null;
+  cognitiveHistory: CognitiveDashboardPoint[];
   painIntensitySnapshot: PainIntensityDashboardSnapshot | null;
   painIntensityHistory: PainIntensityDashboardPoint[];
   careProgramRows: CareProgramHomeRow[];
 };
 
-async function fetchDashboardAws(): Promise<DashboardData> {
-  const careProgramRows: CareProgramHomeRow[] = await Promise.all(
-    ALL_FORMS.map(async (f) => {
-      try {
-        const snap = await resolveAssignmentSnapshot(f.id);
-        return {
-          id: f.id,
-          title: (f.name ?? "").trim(),
-          pending: snap.pending,
-        };
-      } catch {
-        return {
-          id: f.id,
-          title: (f.name ?? "").trim(),
-          pending: true,
-        };
-      }
-    }),
-  );
-
-  const emaRows: CareProgramHomeRow[] = await Promise.all(
-    ALL_EMA_FORMS.map(async (f) => {
-      try {
-        const pending = await resolveEmaAssignmentPending(f.id, Date.now());
-        return {
-          id: f.id,
-          title: (f.name ?? "").trim(),
-          pending,
-        };
-      } catch {
-        return {
-          id: f.id,
-          title: (f.name ?? "").trim(),
-          pending: false,
-        };
-      }
-    }),
-  );
-
-  const scaleOpen = careProgramRows.reduce<number>(
-    (n, row) => n + (row.pending ? 1 : 0),
-    0,
-  );
-  const emaOpen = emaRows.reduce<number>(
-    (n, row) => n + (row.pending ? 1 : 0),
-    0,
-  );
-  const openQuestionnaires = scaleOpen + emaOpen;
-
-  let recentAssignmentTitle: string | null = null;
+async function fetchDashboardAws(options?: {
+  forceEmaRefresh?: boolean;
+}): Promise<DashboardData> {
+  let librePending = true;
+  let longAssessmentPending = false;
   try {
-    const rows = await getMyFormResponses(undefined, 80);
-    const careOnly = rows.filter((r) => ASSIGNABLE_CARE_FORM_IDS.has(r.form_id));
-    careOnly.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-    const latest = careOnly[0];
-    if (latest) {
-      recentAssignmentTitle =
-        getFormById(latest.form_id)?.name?.trim() || latest.form_id;
-    }
+    const [libreSnap, longSnap] = await Promise.all([
+      resolveAssignmentSnapshot(LIBRE_FORM.id),
+      resolveLongAssessmentSnapshot(),
+    ]);
+    librePending = libreSnap.pending;
+    longAssessmentPending = longSnap.pending;
   } catch {
-    recentAssignmentTitle = null;
+    librePending = true;
+    longAssessmentPending = false;
   }
+
+  const careProgramRows: CareProgramHomeRow[] = [
+    {
+      id: LIBRE_FORM.id,
+      title: (LIBRE_FORM.name ?? "").trim(),
+      pending: librePending,
+    },
+    ...(longAssessmentPending
+      ? [
+          {
+            id: LONG_ASSESSMENT_BUNDLE_ID,
+            title: LONG_ASSESSMENT_FORM.name,
+            pending: true,
+          },
+        ]
+      : []),
+  ];
+
+  let emaState: Awaited<ReturnType<typeof loadTodayEmaState>> | null = null;
+  try {
+    emaState = await loadTodayEmaState({
+      force: options?.forceEmaRefresh ?? false,
+    });
+  } catch {
+    emaState = null;
+  }
+
+  const emaRows: CareProgramHomeRow[] = ALL_EMA_FORMS.map((f) => ({
+    id: f.id,
+    title: (f.name ?? "").trim(),
+    pending: emaState
+      ? resolveEmaPendingFromState(f.id, emaState)
+      : true,
+  }));
 
   let libreDomains = EMPTY_LIBRE.domains;
   let libreOverall = EMPTY_LIBRE.overallTScore;
@@ -231,6 +237,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
         total: scored.total,
         domainById: scored.domainById,
         isComplete: scored.isComplete,
+        sleepHours: estimatedSleepHoursFromQ4(raw.psqi_4_sleep_hours),
       };
       break;
     }
@@ -239,6 +246,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
   }
 
   let fatigueSnapshot: FatigueDashboardSnapshot | null = null;
+  let fatigueHistory: FatigueDashboardPoint[] = [];
   try {
     const fatigueRows = await getMyFormResponses("fatigue_v1", FATIGUE_FETCH_LIMIT);
     fatigueRows.sort(
@@ -246,6 +254,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
         Date.parse(String(b.created_at ?? 0)) -
         Date.parse(String(a.created_at ?? 0)),
     );
+    const buckets: FatigueDashboardPoint[] = [];
     for (const row of fatigueRows) {
       const createdRaw =
         row.created_at && typeof row.created_at === "string"
@@ -258,14 +267,20 @@ async function fetchDashboardAws(): Promise<DashboardData> {
       );
       if (ans === null || Object.keys(ans).length === 0) continue;
       const scored = scoreFatigue(ans);
-      fatigueSnapshot = {
+      if (!scored.isComplete || scored.tScore === null) continue;
+      const point: FatigueDashboardPoint = {
         createdAtIso: createdRaw,
         ...scored,
       };
-      break;
+      buckets.push(point);
+      if (!fatigueSnapshot) {
+        fatigueSnapshot = point;
+      }
     }
+    fatigueHistory = buckets;
   } catch {
     fatigueSnapshot = null;
+    fatigueHistory = [];
   }
 
   let painIntensitySnapshot: PainIntensityDashboardSnapshot | null = null;
@@ -309,6 +324,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
   }
 
   let gad7Snapshot: Gad7DashboardSnapshot | null = null;
+  let gad7History: Gad7DashboardPoint[] = [];
   try {
     const rows = await getMyFormResponses("gad7_v1", GAD_COGNITIVE_FETCH_LIMIT);
     rows.sort(
@@ -316,6 +332,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
         Date.parse(String(b.created_at ?? 0)) -
         Date.parse(String(a.created_at ?? 0)),
     );
+    const buckets: Gad7DashboardPoint[] = [];
     for (const row of rows) {
       const createdRaw =
         row.created_at && typeof row.created_at === "string"
@@ -329,17 +346,23 @@ async function fetchDashboardAws(): Promise<DashboardData> {
       if (ans === null || Object.keys(ans).length === 0) continue;
       const scored = scoreGad7(ans);
       if (!scored.isComplete) continue;
-      gad7Snapshot = {
+      const point: Gad7DashboardPoint = {
         createdAtIso: createdRaw,
         ...scored,
       };
-      break;
+      buckets.push(point);
+      if (!gad7Snapshot) {
+        gad7Snapshot = point;
+      }
     }
+    gad7History = buckets;
   } catch {
     gad7Snapshot = null;
+    gad7History = [];
   }
 
   let cognitiveSnapshot: CognitiveDashboardSnapshot | null = null;
+  let cognitiveHistory: CognitiveDashboardPoint[] = [];
   try {
     const rows = await getMyFormResponses(
       "cognitive_function_v1",
@@ -350,6 +373,7 @@ async function fetchDashboardAws(): Promise<DashboardData> {
         Date.parse(String(b.created_at ?? 0)) -
         Date.parse(String(a.created_at ?? 0)),
     );
+    const buckets: CognitiveDashboardPoint[] = [];
     for (const row of rows) {
       const createdRaw =
         row.created_at && typeof row.created_at === "string"
@@ -363,19 +387,22 @@ async function fetchDashboardAws(): Promise<DashboardData> {
       if (ans === null || Object.keys(ans).length === 0) continue;
       const scored = scoreCognitiveFunction(ans);
       if (!scored.isComplete) continue;
-      cognitiveSnapshot = {
+      const point: CognitiveDashboardPoint = {
         createdAtIso: createdRaw,
         ...scored,
       };
-      break;
+      buckets.push(point);
+      if (!cognitiveSnapshot) {
+        cognitiveSnapshot = point;
+      }
     }
+    cognitiveHistory = buckets;
   } catch {
     cognitiveSnapshot = null;
+    cognitiveHistory = [];
   }
 
   return {
-    openQuestionnaires,
-    recentAssignmentTitle,
     emaRows,
     libreDomains,
     libreOverall,
@@ -383,8 +410,11 @@ async function fetchDashboardAws(): Promise<DashboardData> {
     libreSubmissionHistory,
     psqiSnapshot,
     fatigueSnapshot,
+    fatigueHistory,
     gad7Snapshot,
+    gad7History,
     cognitiveSnapshot,
+    cognitiveHistory,
     painIntensitySnapshot,
     painIntensityHistory,
     careProgramRows,
@@ -393,33 +423,48 @@ async function fetchDashboardAws(): Promise<DashboardData> {
 
 export default function HomeScreen() {
   const { me } = usePostAuth();
+  const { signOut } = useSession();
   const displayName =
     typeof me?.name === "string" && me.name.trim() !== ""
       ? me.name.trim()
       : null;
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [burnDayLabel, setBurnDayLabel] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  const hydrate = useCallback(async () => {
-    const next = await fetchDashboardAws();
-    setDashboard(next);
+  const hydrate = useCallback(async (forceEmaRefresh = false) => {
+    const next = await fetchDashboardAws({ forceEmaRefresh });
+    return next;
+  }, []);
+
+  const hydrateBurnDay = useCallback(async () => {
+    try {
+      const submittedAt = await getOnboardingSubmittedAt();
+      setBurnDayLabel(formatProgramDayLabel(submittedAt));
+    } catch {
+      setBurnDayLabel(null);
+    }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       void (async () => {
-        if (!cancelled) await hydrate();
+        const next = await hydrate();
+        if (!cancelled) setDashboard(next);
+        if (!cancelled) await hydrateBurnDay();
       })();
       return () => {
         cancelled = true;
       };
-    }, [hydrate]),
+    }, [hydrate, hydrateBurnDay]),
   );
 
   useEffect(() => {
+    let mounted = true;
     const sub = AppState.addEventListener("change", (nextState) => {
       const prev = appStateRef.current;
       appStateRef.current = nextState;
@@ -427,29 +472,59 @@ export default function HomeScreen() {
         (prev === "inactive" || prev === "background") &&
         nextState === "active"
       ) {
-        void hydrate();
+        void (async () => {
+          const next = await hydrate();
+          if (mounted) setDashboard(next);
+          if (mounted) await hydrateBurnDay();
+        })();
       }
     });
     return () => {
+      mounted = false;
       sub.remove();
     };
-  }, [hydrate]);
+  }, [hydrate, hydrateBurnDay]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await hydrate();
+      const next = await hydrate(true);
+      setDashboard(next);
+      await hydrateBurnDay();
     } finally {
       setRefreshing(false);
     }
-  }, [hydrate]);
+  }, [hydrate, hydrateBurnDay]);
 
-  const recentLabel =
-    dashboard !== null &&
-    dashboard.recentAssignmentTitle &&
-    dashboard.recentAssignmentTitle !== ""
-      ? dashboard.recentAssignmentTitle
-      : "n/a";
+  const welcomeFacility = resolveWelcomeFacility(me);
+  const welcomeRole = resolveWelcomeRole(me, "patient");
+  const patientActivityIsos = useMemo(() => {
+    if (!dashboard) return [];
+    return [
+      dashboard.libreSubmittedAtIso,
+      dashboard.psqiSnapshot?.createdAtIso,
+      dashboard.fatigueSnapshot?.createdAtIso,
+      dashboard.gad7Snapshot?.createdAtIso,
+      dashboard.cognitiveSnapshot?.createdAtIso,
+      dashboard.painIntensitySnapshot?.createdAtIso,
+      ...dashboard.fatigueHistory.map((row) => row.createdAtIso),
+      ...dashboard.gad7History.map((row) => row.createdAtIso),
+      ...dashboard.cognitiveHistory.map((row) => row.createdAtIso),
+      ...dashboard.painIntensityHistory.map((row) => row.createdAtIso),
+      ...dashboard.libreSubmissionHistory.map((row) => row.createdAtIso),
+    ].filter((iso): iso is string => typeof iso === "string" && iso.trim() !== "");
+  }, [dashboard]);
+  const lastVisitDaysAgo = useMemo(
+    () => resolveLastVisitDaysAgo(me, patientActivityIsos),
+    [me, patientActivityIsos],
+  );
+
+  const pendingTodayRows = useMemo(() => {
+    if (!dashboard) return [];
+    return [...dashboard.emaRows, ...dashboard.careProgramRows].filter(
+      (row) => row.pending,
+    );
+  }, [dashboard]);
 
   return (
     <Screen
@@ -467,19 +542,17 @@ export default function HomeScreen() {
     >
       <StatusBar style="dark" />
 
-      <DashboardWelcomeHeader name={displayName} />
+      <MassGeneralHospitalLogo />
 
-      <View style={styles.introBlock}>
-        <Text style={[styles.kicker, typography.eyebrow]}>Overview</Text>
-        <Text style={[styles.lede, typography.body]}>
-          Recovery check-ins assigned by your hospital and your latest Care
-          program submissions, loaded from BurnX servers.
-        </Text>
-      </View>
-
-      <View style={styles.clinicalNoticeWrap}>
-        <AssistiveClinicalNotice />
-      </View>
+      <View style={styles.homeStack}>
+      <DashboardWelcomeHeader
+        burnDayLabel={burnDayLabel}
+        facility={welcomeFacility}
+        lastVisitDaysAgo={lastVisitDaysAgo}
+        name={displayName}
+        role={welcomeRole}
+        onAccountPress={() => setAccountOpen(true)}
+      />
 
       {!dashboard ? (
         <View style={styles.loader}>
@@ -487,22 +560,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.metrics}>
-            <MetricCard
-              footer="Count of questionnaires currently due under your care assignments"
-              label="Open questionnaires"
-              value={String(dashboard.openQuestionnaires)}
-            />
-            <MetricCard
-              footer="Latest completed questionnaire from Care programs"
-              label="Recent assignment"
-              value={recentLabel}
-            />
-          </View>
-
-          <EmaHomeSection
-            rows={dashboard.emaRows.filter((r) => r.pending)}
-          />
+          <DashboardOverviewSection rows={pendingTodayRows} />
 
             <LibreSectionalRadar
               domains={dashboard.libreDomains}
@@ -513,52 +571,70 @@ export default function HomeScreen() {
 
             <PsqiSleepQualityCard snapshot={dashboard.psqiSnapshot} />
 
-            <FatigueScoreCard snapshot={dashboard.fatigueSnapshot} />
+            <FatigueScoreCard
+              history={dashboard.fatigueHistory}
+              snapshot={dashboard.fatigueSnapshot}
+            />
 
-            <Gad7DashboardCard snapshot={dashboard.gad7Snapshot} />
+            <Gad7DashboardCard
+              history={dashboard.gad7History}
+              snapshot={dashboard.gad7Snapshot}
+            />
 
-            <CognitiveFunctionDashboardCard snapshot={dashboard.cognitiveSnapshot} />
+            <CognitiveFunctionDashboardCard
+              history={dashboard.cognitiveHistory}
+              snapshot={dashboard.cognitiveSnapshot}
+            />
 
             <PainIntensityScoreCard
               history={dashboard.painIntensityHistory}
               snapshot={dashboard.painIntensitySnapshot}
             />
 
+            <AppleHealthSection />
+
+            <View style={styles.voiceAnalysisWrap}>
+              <VoiceAnalysisDashboardCard />
+            </View>
+
           <DashboardBottomSections
             careProgramRows={dashboard.careProgramRows}
           />
         </>
       )}
+      </View>
+      <AccountSidePanel
+        displayName={displayName ?? "Patient"}
+        facility={welcomeFacility}
+        role={welcomeRole}
+        roleLabel="Patient account"
+        visible={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        onSettings={() => {
+          setAccountOpen(false);
+          router.push("/settings" as Href);
+        }}
+        onSignOut={() => {
+          setAccountOpen(false);
+          void signOut();
+        }}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  introBlock: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
-    maxWidth: 560,
-  },
-  kicker: {
-    color: colors.primary,
-    marginBottom: spacing.sm + 2,
-  },
-  lede: {
-    color: colors.textSecondary,
-    lineHeight: 26,
-    marginBottom: 0,
-  },
-  clinicalNoticeWrap: {
-    marginBottom: spacing.xl + spacing.sm,
+  homeStack: {
+    width: "100%",
+    alignSelf: "stretch",
   },
   loader: {
     paddingVertical: spacing.xxl,
     alignItems: "center",
   },
-  metrics: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
-    marginBottom: spacing.xxl + spacing.sm,
+  voiceAnalysisWrap: {
+    width: "100%",
+    alignSelf: "stretch",
+    marginBottom: spacing.xxl,
   },
 });

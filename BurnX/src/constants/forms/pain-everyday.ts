@@ -1,25 +1,15 @@
 import type { ScaleQuestionnaireForm } from './types';
+import { EMA_PAIN_FORM_ID } from '../ema-form-ids';
+import { emaScaleLabels } from '../../lib/ema-vas-config';
 
 export const EMA_PAIN_NOW_FORM: ScaleQuestionnaireForm = {
-  id: 'ema_pain_now_v1',
+  id: EMA_PAIN_FORM_ID,
   name: 'Pain Check-In',
   description: 'Quick daily pain rating.',
   assignmentCadenceDays: 1,
   scales: {
     pain_vas_11: {
-      labels: [
-        '0 - No pain',
-        '1',
-        '2',
-        '3',
-        '4',
-        '5',
-        '6',
-        '7',
-        '8',
-        '9',
-        '10 - Worst pain imaginable',
-      ],
+      labels: [...emaScaleLabels(EMA_PAIN_FORM_ID)],
     },
   },
   sections: [

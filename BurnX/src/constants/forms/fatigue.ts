@@ -9,7 +9,6 @@ export const FATIGUE_FORM: ScaleQuestionnaireForm = {
   id: "fatigue_v1",
   name: "Fatigue",
   description: "How fatigue has affected you. The time frame is shown above.",
-  assignmentCadenceDays: 7,
   scales: {
     fatigue_frequency: {
       labels: ["Never", "Rarely", "Sometimes", "Often", "Always"],

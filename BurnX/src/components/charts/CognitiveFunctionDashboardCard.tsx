@@ -3,20 +3,15 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo } from "react";
-import {
-  AccessibilityInfo,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { CognitiveFunctionEducationModal } from "./CognitiveFunctionEducationModal";
 import { IosSemiGauge } from "./IosSemiGauge";
 import {
   COGNITIVE_TOTAL_MAX,
   cognitiveSeverityFromTotal,
   type CognitiveBurdenSeverity,
+  type CognitiveDashboardPoint,
   type CognitiveDashboardSnapshot,
 } from "../../lib/cognitive-function-scoring";
 import { colors } from "../../theme/colors";
@@ -64,9 +59,13 @@ function formatSubmitted(iso: string | null): string | null {
   }).format(d);
 }
 
-type Props = { snapshot: CognitiveDashboardSnapshot | null };
+type Props = {
+  snapshot: CognitiveDashboardSnapshot | null;
+  history?: CognitiveDashboardPoint[];
+};
 
-export function CognitiveFunctionDashboardCard({ snapshot }: Props) {
+export function CognitiveFunctionDashboardCard({ snapshot, history = [] }: Props) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const submittedLine = useMemo(
     () => formatSubmitted(snapshot?.createdAtIso ?? null),
     [snapshot?.createdAtIso],
@@ -78,21 +77,16 @@ export function CognitiveFunctionDashboardCard({ snapshot }: Props) {
     complete && total !== null ? cognitiveSeverityFromTotal(total) : null;
   const palette =
     severity !== null ? SEVERITY_ACCENT[severity] : SEVERITY_ACCENT.low;
-
-  function announceInterpretation(): void {
-    const s = severity ?? ("low" as CognitiveBurdenSeverity);
-    const phrase = `${SEVERITY_LABEL[s]} Total signal ${total !== null ? String(total) : "not computed"} of ${COGNITIVE_TOTAL_MAX}.`;
-    void AccessibilityInfo.announceForAccessibility(phrase);
-  }
+  const animateKey = snapshot?.createdAtIso ?? "cognitive-empty";
 
   return (
     <View accessibilityRole="summary" style={styles.card}>
       <Pressable
-        accessibilityHint="Reads descriptive context for how BurnX summarizes these cognitive symptom items"
-        accessibilityLabel="Cognitive function dashboard card header"
+        accessibilityHint="Opens cognitive function history, reference bands, and score details"
+        accessibilityLabel="Cognitive function dashboard card header. Open details"
         accessibilityRole="button"
         android_ripple={{ color: "rgba(15,23,42,0.06)", foreground: false }}
-        onPress={announceInterpretation}
+        onPress={() => setDetailOpen(true)}
         style={({ pressed }) => [
           styles.chromePressable,
           pressed && Platform.OS === "ios" && { opacity: 0.92 },
@@ -110,6 +104,13 @@ export function CognitiveFunctionDashboardCard({ snapshot }: Props) {
                 Cognitive function
               </Text>
             </View>
+            <Ionicons
+              accessibilityElementsHidden
+              color={CARD.muted}
+              importantForAccessibility="no"
+              name="information-circle-outline"
+              size={20}
+            />
           </View>
           <Text style={[styles.captionMetaBelow, typography.micro]}>
             Weekly screen · Burden score 0–{String(COGNITIVE_TOTAL_MAX)}
@@ -128,30 +129,49 @@ export function CognitiveFunctionDashboardCard({ snapshot }: Props) {
         )}
       </Pressable>
 
-      <View style={styles.gaugeWrap}>
-        <IosSemiGauge
-          accentColor={palette.main}
-          accentSoft={palette.soft}
-          maxValue={COGNITIVE_TOTAL_MAX}
-          tickTotals={[4, 8, 12]}
-          value={total}
-        />
-        <View style={styles.gaugeMetricBlock}>
-          <Text accessibilityRole="text" style={styles.scoreHuge}>
-            {total !== null ? String(total) : "–"}
-          </Text>
-          <Text style={[styles.bandTag, typography.caption]}>
-            {complete && severity !== null
-              ? SEVERITY_LABEL[severity]
-              : "Fill all prompts for a summed burden metric"}
-          </Text>
+      <Text style={[styles.chartHint, typography.caption]}>
+        Tap the header or score for cognitive burden history and how NeoTherm summarizes these items.
+      </Text>
+
+      <Pressable
+        accessibilityHint="Opens cognitive function history and score details"
+        accessibilityLabel="Cognitive function gauge. Open details"
+        accessibilityRole="button"
+        onPress={() => setDetailOpen(true)}
+        style={({ pressed }) => [styles.gaugePressable, pressed && { opacity: 0.94 }]}
+      >
+        <View style={styles.gaugeWrap}>
+          <IosSemiGauge
+            accentColor={palette.main}
+            animateKey={animateKey}
+            maxValue={COGNITIVE_TOTAL_MAX}
+            tickTotals={[4, 8, 12]}
+            value={total}
+          />
+          <View style={styles.gaugeMetricBlock}>
+            <Text accessibilityRole="text" style={styles.scoreHuge}>
+              {total !== null ? String(total) : "–"}
+            </Text>
+            <Text style={[styles.bandTag, typography.caption]}>
+              {complete && severity !== null
+                ? SEVERITY_LABEL[severity]
+                : "Fill all prompts for a summed burden metric"}
+            </Text>
+          </View>
         </View>
-      </View>
+      </Pressable>
 
       <Text style={[styles.footerNote, typography.caption]}>
         Arc ticks cue evenly spaced thirds of the maximal raw sum (clinical trials often monitor change over weeks).
         Interpret alongside sleep, fatigue, and medication changes.
       </Text>
+
+      <CognitiveFunctionEducationModal
+        history={history}
+        onClose={() => setDetailOpen(false)}
+        snapshot={snapshot}
+        visible={detailOpen}
+      />
     </View>
   );
 }
@@ -222,6 +242,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 20,
   },
+  chartHint: {
+    color: colors.textMuted,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
   submittedStamp: {
     color: CARD.fg,
     fontFamily: typography.micro.fontFamily,
@@ -237,6 +262,9 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 2,
     marginBottom: 2,
+  },
+  gaugePressable: {
+    width: "100%",
   },
   gaugeWrap: {
     alignItems: "center",

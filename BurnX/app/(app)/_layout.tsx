@@ -5,6 +5,8 @@ import { Fragment } from "react";
 import { Easing, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PatientEmaNotificationBootstrap } from "../../src/components/PatientEmaNotificationBootstrap";
+import { PatientHomeAwayTrackingBootstrap } from "../../src/components/PatientHomeAwayTrackingBootstrap";
+import { PatientSleepTrackingBootstrap } from "../../src/components/PatientSleepTrackingBootstrap";
 import { bxLog } from "../../src/lib/debug-log";
 import { colors } from "../../src/theme/colors";
 
@@ -31,9 +33,14 @@ export default function AppLayout() {
   return (
     <Fragment>
       <PatientEmaNotificationBootstrap />
+      <PatientHomeAwayTrackingBootstrap />
+      <PatientSleepTrackingBootstrap />
     <Tabs
+      detachInactiveScreens={false}
       screenOptions={{
         animation: "shift",
+        freezeOnBlur: false,
+        lazy: false,
         transitionSpec: {
           animation: "timing",
           config: {
@@ -54,20 +61,19 @@ export default function AppLayout() {
           paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: colors.tabBar,
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: colors.tabBarBorder,
+          borderTopColor: "#E2E8F0",
           height: 56 + bottomPad,
           paddingBottom: bottomPad,
           paddingTop: 6,
           ...Platform.select({
             ios: {
-              shadowColor: colors.shadow,
-              shadowOffset: { width: 0, height: -4 },
-              shadowOpacity: 0.07,
-              shadowRadius: 14,
+              shadowColor: "transparent",
+              shadowOpacity: 0,
+              shadowRadius: 0,
             },
-            default: { elevation: 10 },
+            default: { elevation: 0 },
           }),
         },
       }}
@@ -93,22 +99,9 @@ export default function AppLayout() {
         }}
         options={{
           title: "Care programs",
+          href: "/forms/daily",
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} name="reader-outline" nameFocused="reader" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="image"
-        listeners={{
-          focus: () => bxLog("tabs", "focused", "Image"),
-          tabPress: () => bxLog("tabs", "tabPress", "Image"),
-        }}
-        options={{
-          title: "Image",
-          href: Platform.OS === "web" ? null : undefined,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} name="camera-outline" nameFocused="camera" />
           ),
         }}
       />
@@ -126,11 +119,7 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="voice-checkin"
-        listeners={{
-          focus: () => bxLog("tabs", "focused", "Voice check-in"),
-          tabPress: () => bxLog("tabs", "tabPress", "Voice check-in"),
-        }}
+        name="settings"
         options={{ href: null }}
       />
     </Tabs>

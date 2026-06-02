@@ -7,6 +7,7 @@ import { firstNameFromMeName } from "../constants/ema-copy";
 import { useSession } from "../lib/auth-context";
 import { getMe } from "../lib/api";
 import { bxLog } from "../lib/debug-log";
+import { localCalendarYmd } from "../lib/ema-schedule-fallback";
 import {
   emaOutstandingMatchesAssignmentsUi,
   ensureNotificationPresentationConfigured,
@@ -15,13 +16,14 @@ import {
 } from "../lib/notifications-engine";
 import { useToast } from "./ToastProvider";
 
-/** Deep links BurnX-triggered notifications that include `href` + `kind`. */
+/** Deep links NeoTherm-triggered notifications that include `href` + `kind`. */
 function readRoutableNotificationHref(
   data: Record<string, unknown> | undefined | null,
 ): Href | null {
   if (!data || typeof data !== "object") return null;
   const kind = data.kind;
   if (
+    kind !== "ema_open" &&
     kind !== "ema_strike" &&
     kind !== "ema_audit" &&
     kind !== "test_preview"
@@ -48,6 +50,8 @@ export function PatientEmaNotificationBootstrap(): null {
   const { role } = useSession();
   const { showToast } = useToast();
   const lastForegroundRefreshAtRef = useRef(0);
+  const lastSyncScheduleAtRef = useRef(0);
+  const lastSyncScheduleYmdRef = useRef<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   /** After first **`refreshSchedules`** completes: **`undefined`** = loading; **`null`** = Dynamo GET failed (toast predicate still runs). */
   const [assignmentsSnapshot, setAssignmentsSnapshot] = useState<
@@ -63,6 +67,8 @@ export function PatientEmaNotificationBootstrap(): null {
       if (Platform.OS !== "web") {
         try {
           await syncSchedule();
+          lastSyncScheduleAtRef.current = Date.now();
+          lastSyncScheduleYmdRef.current = localCalendarYmd();
         } catch (caught) {
           bxLog("notifications", "initial syncSchedule failed", caught);
         }
@@ -115,8 +121,8 @@ export function PatientEmaNotificationBootstrap(): null {
         }
 
         const who = first ?? "there";
-        showToast(`Hey ${who}, you've got pending check-ins waiting.`, "info", {
-          onPress: () => router.push("/forms" as Href),
+        showToast(`Hey ${who}, you have pending check ins waiting.`, "info", {
+          onPress: () => router.push("/forms/daily" as Href),
         });
       } catch (caught) {
         bxLog("notifications", "pending EMA toast skipped", caught);
@@ -157,7 +163,31 @@ export function PatientEmaNotificationBootstrap(): null {
       ) {
         return;
       }
+
       const now = Date.now();
+      const today = localCalendarYmd(new Date(now));
+      const dayChanged = lastSyncScheduleYmdRef.current !== today;
+      const syncStale = now - lastSyncScheduleAtRef.current >= 24 * 60 * 60 * 1000;
+
+      if (dayChanged || syncStale) {
+        lastSyncScheduleAtRef.current = now;
+        lastSyncScheduleYmdRef.current = today;
+        void (async () => {
+          try {
+            await syncSchedule();
+          } catch (caught) {
+            bxLog("notifications", "foreground syncSchedule failed", caught);
+          }
+          try {
+            await refreshSchedules();
+          } catch (caught) {
+            bxLog("notifications", "foreground refreshSchedules failed", caught);
+          }
+        })();
+        lastForegroundRefreshAtRef.current = now;
+        return;
+      }
+
       if (now - lastForegroundRefreshAtRef.current >= 60_000) {
         lastForegroundRefreshAtRef.current = now;
         void refreshSchedules();

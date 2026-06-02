@@ -4,7 +4,6 @@ export const PSQI_FORM: ScaleQuestionnaireForm = {
   id: "psqi_v1",
   name: "PSQI",
   description: "Sleep quality assessment",
-  assignmentCadenceDays: 7,
   scales: {
     psqi_time_bed: {
       labels: [

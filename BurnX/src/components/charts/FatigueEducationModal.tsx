@@ -1,5 +1,5 @@
 /**
- * Reference sheet for PROMIS Fatigue 7a home card plus optional snapshot.
+ * PROMIS Fatigue 7a guide with submission history bar chart.
  */
 
 import { Ionicons } from "@expo/vector-icons";
@@ -13,26 +13,49 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { FatigueDashboardSnapshot, FatigueSeverity } from "../../lib/fatigue-scoring";
+import type {
+  FatigueDashboardPoint,
+  FatigueDashboardSnapshot,
+  FatigueSeverity,
+} from "../../lib/fatigue-scoring";
 import { colors } from "../../theme/colors";
 import { radius, spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
+import { FatigueTScoreBarChart } from "./ui/FatigueTScoreBarChart";
 
 const NAVY = "#0F172A";
 const SURFACE = "#F9FAFB";
 const STROKE = "rgba(15, 23, 42, 0.08)";
+const SCALE_MIN = 30;
+const SCALE_MAX = 80;
+const SCALE_SPAN = SCALE_MAX - SCALE_MIN;
 
 const SEVERITY_LABEL: Record<FatigueSeverity, string> = {
-  none: "None (below usual clinical thresholds on this metric)",
+  none: "Low",
   mild: "Mild",
   moderate: "Moderate",
-  severe: "Severe",
+  severe: "High",
 };
+
+const SEVERITY_COLOR: Record<FatigueSeverity, string> = {
+  none: "#22C55E",
+  mild: "#F59E0B",
+  moderate: "#EA580C",
+  severe: "#DC2626",
+};
+
+const SCALE_BANDS = [
+  { from: 30, to: 55, label: "Low", color: "#22C55E" },
+  { from: 55, to: 60, label: "Mild", color: "#F59E0B" },
+  { from: 60, to: 70, label: "Moderate", color: "#EA580C" },
+  { from: 70, to: 80, label: "High", color: "#DC2626" },
+] as const;
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   snapshot: FatigueDashboardSnapshot | null;
+  history: FatigueDashboardPoint[];
 };
 
 function formatSubmitted(iso: string | null): string | null {
@@ -45,7 +68,63 @@ function formatSubmitted(iso: string | null): string | null {
   }).format(d);
 }
 
-export function FatigueEducationModal({ visible, onClose, snapshot }: Props) {
+function pctFromTScore(t: number): number {
+  const c = Math.min(SCALE_MAX, Math.max(SCALE_MIN, t));
+  return ((c - SCALE_MIN) / SCALE_SPAN) * 100;
+}
+
+function bandWidthPct(from: number, to: number): `${number}%` {
+  return `${((to - from) / SCALE_SPAN) * 100}%`;
+}
+
+function FatigueScaleGuide({ tScore }: { tScore: number | null }) {
+  return (
+    <View style={styles.scaleCard}>
+      <View style={styles.scaleAxis}>
+        <Text style={[styles.axisLabel, typography.micro]}>{SCALE_MIN}</Text>
+        <Text style={[styles.axisLabel, typography.micro]}>{SCALE_MAX}</Text>
+      </View>
+      <View style={styles.scaleTrack}>
+        {SCALE_BANDS.map((band) => (
+          <View
+            key={band.label}
+            style={[
+              styles.scaleSegment,
+              { width: bandWidthPct(band.from, band.to), backgroundColor: band.color },
+            ]}
+          />
+        ))}
+        {tScore !== null ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.scoreMarker,
+              { left: `${pctFromTScore(tScore)}%` as `${number}%` },
+            ]}
+          />
+        ) : null}
+      </View>
+      <View style={styles.legendRow}>
+        {SCALE_BANDS.map((band) => (
+          <View key={band.label} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: band.color }]} />
+            <Text style={[styles.legendText, typography.micro]}>
+              {band.from}
+              {band.to < SCALE_MAX ? `-${band.to}` : "+"} {band.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function FatigueEducationModal({
+  visible,
+  onClose,
+  snapshot,
+  history,
+}: Props) {
   const insets = useSafeAreaInsets();
   const presentationStyle =
     Platform.OS === "ios" ? ("pageSheet" as const) : undefined;
@@ -55,6 +134,8 @@ export function FatigueEducationModal({ visible, onClose, snapshot }: Props) {
     snapshot?.isComplete === true &&
     snapshot.tScore !== null &&
     snapshot.standardError !== null;
+  const tScore = snapshot?.tScore ?? null;
+  const severity = snapshot?.severity ?? null;
 
   const body = (
     <View
@@ -71,10 +152,10 @@ export function FatigueEducationModal({ visible, onClose, snapshot }: Props) {
         <View style={styles.modalHeader}>
           <View style={styles.modalHeaderTitles}>
             <Text style={[typography.title, styles.modalTitle]}>
-              About PROMIS Fatigue 7a
+              PROMIS Fatigue 7a
             </Text>
             <Text style={[typography.caption, styles.modalSub]}>
-              How BurnX derives your PROMIS fatigue T-score, what the home scale shows, and what the numbers usually mean for self-monitoring.
+              T-score history and reference scale
             </Text>
           </View>
           <Pressable
@@ -96,79 +177,90 @@ export function FatigueEducationModal({ visible, onClose, snapshot }: Props) {
           showsVerticalScrollIndicator={false}
           style={styles.scroll}
         >
-          {snapshot ? (
+          <View style={styles.securityStrip}>
+            <Ionicons color={colors.primary} name="shield-checkmark" size={18} />
+            <Text style={[typography.caption, styles.securityText]}>
+              Protected health information. Visible only while you are signed in on
+              this device.
+            </Text>
+          </View>
+
+          <Text style={[typography.micro, styles.sectionEyebrow]}>
+            Submission history
+          </Text>
+          <FatigueTScoreBarChart
+            highlightIso={snapshot?.createdAtIso ?? null}
+            points={history}
+          />
+
+          {snapshot && complete ? (
             <View style={styles.snapshotCard}>
               <Text style={[typography.micro, styles.snapshotEyebrow]}>
-                Your latest snapshot
+                Latest result
               </Text>
               {submitted ? (
                 <Text style={[typography.caption, styles.snapshotTime]}>
                   {submitted}
                 </Text>
               ) : null}
-              {complete ? (
-                <>
-                  <Text style={[typography.title, styles.snapshotTotal]}>
-                    T-score:{" "}
-                    {Math.round(snapshot.tScore! * 10) / 10}
-                    {" · "}
-                    {snapshot.severity
-                      ? SEVERITY_LABEL[snapshot.severity]
-                      : ""}
-                  </Text>
-                  <Text style={[typography.caption, styles.snapshotBand]}>
-                    Raw sum from seven valid responses:{" "}
-                    {snapshot.rawScore ?? "n/a"}
-                    . Standard error on the PROMIS metric (T): ±
-                    {Math.round(snapshot.standardError! * 10) / 10}.
-                  </Text>
-                </>
-              ) : (
-                <Text style={[typography.body, styles.snapshotBody]}>
-                  {snapshot.rawScore !== null &&
-                  snapshot.rawScore !== undefined &&
-                  snapshot.tScore === null
-                    ? `Raw sum (${snapshot.rawScore}) did not match the published PROMIS Fatigue 7a table, or some answers were incomplete. Completing each item within allowed ranges usually restores scoring.`
-                    : "Complete all seven PROMIS Fatigue items with valid responses so your T-score snapshot can populate here."}
+              <View style={styles.snapshotMain}>
+                <Text style={[styles.snapshotScore, typography.title]}>
+                  T {Math.round(tScore! * 10) / 10}
                 </Text>
-              )}
+                {severity ? (
+                  <View
+                    style={[
+                      styles.severityPill,
+                      { backgroundColor: `${SEVERITY_COLOR[severity]}22` },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.severityDot,
+                        { backgroundColor: SEVERITY_COLOR[severity] },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        typography.caption,
+                        styles.severityPillText,
+                        { color: SEVERITY_COLOR[severity] },
+                      ]}
+                    >
+                      {SEVERITY_LABEL[severity]}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
-          ) : (
-            <Text style={[typography.caption, styles.mutedBlock]}>
-              Complete the PROMIS Fatigue 7a form to see your T-score snapshot in this sheet and on your home dashboard.
+          ) : null}
+
+          <Text style={[typography.micro, styles.sectionEyebrow]}>
+            Reference scale
+          </Text>
+          <FatigueScaleGuide tScore={complete ? tScore : null} />
+
+          <View style={styles.briefList}>
+            <BriefRow
+              icon="arrow-up-outline"
+              text="Higher T-score means more self-reported fatigue."
+            />
+            <BriefRow
+              icon="analytics-outline"
+              text="50 is near the PROMIS reference average."
+            />
+            <BriefRow
+              icon="medkit-outline"
+              text="Use trends to guide conversations with your care team."
+            />
+          </View>
+
+          <View style={styles.disclaimerCard}>
+            <Ionicons color={colors.textMuted} name="lock-closed-outline" size={16} />
+            <Text style={[typography.caption, styles.disclaimerText]}>
+              Scoring follows the HealthMeasures PROMIS Fatigue 7a manual.
             </Text>
-          )}
-
-          <Text style={[typography.micro, styles.sectionEyebrow]}>
-            T-score and scale (about 30 to 80)
-          </Text>
-          <Text style={[typography.caption, styles.para]}>
-            The home card lays out the usual PROMIS short-form fatigue range used in many electronic tools (about T = 30 to 80). Higher values mean stronger self-reported fatigue than lower values for the population reference used when the PROMIS fatigue metric was normed. Fifty is often described roughly as average in the normed sample; dispersion is summarized with a standard deviation around ten T-score units in many PROMIS materials. This app uses the PROMIS-published conversion from your summed item scores to obtain T-score and standard error where all seven items qualify.
-          </Text>
-
-          <Text style={[typography.micro, styles.sectionEyebrow]}>
-            Severity shading (orienting cutoffs at 55, 60, 70)
-          </Text>
-          <Text style={[typography.caption, styles.para]}>
-            The colored band beside your T-score and the ticks on the home bar reuse common illustrative cut-points on this metric (&lt;55 low concern in many clinic charts, mid ranges, ≥70 heavier burden). Labels are abbreviated for readability; BurnX treats them strictly as orientation, not diagnostic labels.
-          </Text>
-
-          <Text style={[typography.micro, styles.sectionEyebrow]}>
-            Seven items on the PROMIS fatigue short form
-          </Text>
-          <Text style={[typography.caption, styles.para]}>
-            Six items contribute their frequency answer as value (option index plus one on a 1 to 5 metric scale). Item 7 (energy compared to strenuous exercise you want to perform) contributes in the reverse direction in the PROMIS manuals (higher endorsed capability lowers fatigue contribution once converted). Answers must sit on permitted response indices for every item before the raw score can convert to your T-score and standard error shown on the dashboard.
-          </Text>
-
-          <Text style={[typography.micro, styles.sectionEyebrow]}>Disclaimer</Text>
-          <Text style={[typography.caption, styles.para]}>
-            PROMIS summaries support communication with your clinicians; interpretations differ by condition and trajectory. Discuss persistent symptoms with your treating team rather than relying on this screen alone for medical decisions.
-          </Text>
-
-          <Text style={[typography.micro, styles.sectionEyebrow]}>Reference</Text>
-          <Text style={[typography.caption, styles.para, styles.reference]}>
-            PROMIS Fatigue scoring is maintained by HealthMeasures; see PROMIS Fatigue User Manual / adult short-form 7a v1 conversion appendices published there for technical detail.
-          </Text>
+          </View>
 
           <View style={{ height: spacing.xxl }} />
         </ScrollView>
@@ -198,6 +290,21 @@ export function FatigueEducationModal({ visible, onClose, snapshot }: Props) {
         <View style={styles.iosWrap}>{body}</View>
       )}
     </Modal>
+  );
+}
+
+function BriefRow({
+  icon,
+  text,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  text: string;
+}) {
+  return (
+    <View style={styles.briefRow}>
+      <Ionicons color={colors.primary} name={icon} size={16} />
+      <Text style={[typography.caption, styles.briefText]}>{text}</Text>
+    </View>
   );
 }
 
@@ -236,7 +343,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   modalHeaderTitles: {
     flex: 1,
@@ -260,8 +367,33 @@ const styles = StyleSheet.create({
     borderColor: STROKE,
   },
   scroll: {
-    maxHeight: 560,
+    maxHeight: 620,
     alignSelf: "stretch",
+  },
+  securityStrip: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: STROKE,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  securityText: {
+    flex: 1,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
+  sectionEyebrow: {
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    fontWeight: "800",
+    letterSpacing: 1.05,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
   },
   snapshotCard: {
     backgroundColor: SURFACE,
@@ -269,7 +401,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: STROKE,
     padding: spacing.md + 2,
-    marginBottom: spacing.lg,
+    marginTop: spacing.lg,
     gap: spacing.sm,
   },
   snapshotEyebrow: {
@@ -282,41 +414,123 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: "600",
   },
-  snapshotBody: {
-    color: colors.textSecondary,
-    lineHeight: 22,
+  snapshotMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    flexWrap: "wrap",
   },
-  snapshotTotal: {
+  snapshotScore: {
     color: NAVY,
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  severityPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  severityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  severityPillText: {
+    fontWeight: "700",
+  },
+  scaleCard: {
+    backgroundColor: SURFACE,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: STROKE,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  scaleAxis: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  axisLabel: {
+    color: colors.textMuted,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  scaleTrack: {
+    height: 14,
+    borderRadius: 7,
+    overflow: "visible",
+    flexDirection: "row",
+    position: "relative",
+  },
+  scaleSegment: {
+    height: 14,
+  },
+  scoreMarker: {
+    position: "absolute",
+    top: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginLeft: -8,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
-  snapshotBand: {
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  briefList: {
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  briefRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  briefText: {
+    flex: 1,
     color: colors.textSecondary,
     lineHeight: 20,
     fontWeight: "500",
   },
-  mutedBlock: {
+  disclaimerCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: STROKE,
+  },
+  disclaimerText: {
+    flex: 1,
     color: colors.textSecondary,
     lineHeight: 20,
-    marginBottom: spacing.lg,
     fontWeight: "500",
-  },
-  sectionEyebrow: {
-    color: colors.textMuted,
-    textTransform: "uppercase",
-    fontWeight: "800",
-    letterSpacing: 1.05,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
-  },
-  para: {
-    color: colors.textSecondary,
-    lineHeight: 22,
-    fontWeight: "500",
-    marginBottom: spacing.sm,
-  },
-  reference: {
-    fontStyle: "italic",
-    color: colors.textMuted,
   },
 });

@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "BurnX",
-    "slug": "BurnX",
+    "name": "NeoTherm",
+    "slug": "NeoTherm",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "burnx",
+    "scheme": "neotherm",
+    "icon": "./assets/images/mgh_logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/images/mgh_logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#F6F8FA",
       "dark": {
@@ -15,17 +17,52 @@
       }
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.6namdang.NeoTherm",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow NeoTherm to use the microphone for MoCA speech tasks and Voice Check-In.",
+        "NSSpeechRecognitionUsageDescription": "Allow NeoTherm to transcribe your spoken responses during the MoCA cognitive assessment.",
+        "NSLocationWhenInUseUsageDescription": "Allow NeoTherm to set your home area from your current location.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow NeoTherm to estimate time at home and outside home using low-power home boundary events, even when the app is closed.",
+        "NSLocalNetworkUsageDescription": "Allow NeoTherm to connect to the Metro development server on your local network during development.",
+        "NSBonjourServices": [
+          "_expo._tcp"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "exp.direct": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
+        },
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.x6namdang.NeoTherm"
     },
     "web": {
       "output": "static"
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       "expo-splash-screen",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
@@ -39,14 +76,37 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow BurnX to record brief voice samples for Voice Check-In as part of your care program."
+          "microphonePermission": "Allow NeoTherm to record brief voice samples for Voice Check-In as part of your care program."
         }
       ],
       [
-        "expo-image-picker",
+        "expo-location",
         {
-          "photosPermission": "Allow BurnX to choose a wound photo from your library for your care program and longitudinal monitoring.",
-          "cameraPermission": "Allow BurnX to take photos of your wound for your care program and longitudinal monitoring."
+          "locationWhenInUsePermission": "Allow NeoTherm to set your home area from your current location.",
+          "locationAlwaysPermission": "Allow NeoTherm to estimate time at home and outside home using low-power home boundary events, even when the app is closed.",
+          "locationAlwaysAndWhenInUsePermission": "Allow NeoTherm to estimate time at home and outside home using low-power home boundary events, even when the app is closed.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Allow NeoTherm to read steps and flights climbed from Apple Health for your recovery dashboard.",
+          "NSHealthUpdateUsageDescription": "NeoTherm does not write health data to Apple Health."
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "NeoTherm uses low-movement verification to estimate overnight sleep while you are at home. Step counts are not stored or sent to a server."
+        }
+      ],
+      "expo-asset",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow NeoTherm to use the microphone for MoCA speech tasks and Voice Check-In.",
+          "speechRecognitionPermission": "Allow NeoTherm to transcribe your spoken responses during the MoCA cognitive assessment."
         }
       ]
     ],

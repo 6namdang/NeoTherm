@@ -8,15 +8,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo, useState } from "react";
 import {
   LayoutChangeEvent,
-  PixelRatio,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import Svg, { Circle, Defs, Line, Path, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
+import { Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { PsqiEducationModal } from "./PsqiEducationModal";
+import { AnimatedArcGauge } from "./ui/AnimatedArcGauge";
+import { AnimatedStackSegment } from "./ui/AnimatedStackSegment";
+import { ClinicalHistoryModal, type ClinicalHistoryPoint } from "./ui/ClinicalHistoryModal";
 import { PSQI_DOMAIN_ACCENT } from "../../constants/psqi-chart-palette";
 import {
   PSQI_DOMAIN_ORDER,
@@ -65,29 +67,14 @@ function formatSubmitted(iso: string | null): string | null {
   }).format(d);
 }
 
-function polar(cx: number, cy: number, r: number, θ: number): { x: number; y: number } {
-  return {
-    x: cx + r * Math.cos(θ),
-    y: cy + r * Math.sin(θ),
-  };
-}
-
-/** SVG arc from angle `a0` to `a1` (radians), clockwise positive in standard math; SVG y-down flips visually. */
-function arcPath(cx: number, cy: number, r: number, a0: number, a1: number): string {
-  const p0 = polar(cx, cy, r, a0);
-  const p1 = polar(cx, cy, r, a1);
-  const sweep = a1 - a0;
-  const large = Math.abs(sweep) > Math.PI ? 1 : 0;
-  const sweepFl = sweep >= 0 ? 1 : 0;
-  return `M ${p0.x.toFixed(3)} ${p0.y.toFixed(3)} A ${r} ${r} 0 ${large} ${sweepFl} ${p1.x.toFixed(3)} ${p1.y.toFixed(3)}`;
-}
-
 type Props = {
   snapshot: PsqiDashboardSubmissionSnapshot | null;
+  history?: ClinicalHistoryPoint[];
 };
 
-export function PsqiSleepQualityCard({ snapshot }: Props) {
+export function PsqiSleepQualityCard({ snapshot, history = [] }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [focusedDomainId, setFocusedDomainId] = useState<PsqiDomainId | null>(
     null,
   );
@@ -106,24 +93,19 @@ export function PsqiSleepQualityCard({ snapshot }: Props) {
 
   const band = psqiClinicalBand(snapshot?.total ?? null);
   const total = snapshot?.total ?? null;
-  const frac = total === null ? 0 : Math.min(1, Math.max(0, total / PSQI_GLOBAL_MAX));
-
-  const arcParams = useMemo(() => {
-    const w = 280;
-    const h = 132;
-    const cx = w / 2;
-    const cy = h - 8;
-    const r = 96;
-    const pad = 0.12;
-    const θ0 = Math.PI + pad;
-    const θ1 = 2 * Math.PI - pad;
-    const span = θ1 - θ0;
-    const θScore = θ0 + span * frac;
-    return { w, h, cx, cy, r, θ0, θ1, θScore, span };
-  }, [frac]);
-
-  const gaugeStroke = PixelRatio.roundToNearestPixel(11);
-  const tickStroke = PixelRatio.roundToNearestPixel(1);
+  const animateKey = snapshot?.createdAtIso ?? "psqi-empty";
+  const valueStroke =
+    band === "good"
+      ? "url(#psqiGaugeGood)"
+      : band === "moderate"
+        ? "#F59E0B"
+        : "url(#psqiGaugePoor)";
+  const knobColor =
+    band === "good"
+      ? BAND_FILL.good
+      : band === "moderate"
+        ? BAND_FILL.moderate
+        : BAND_FILL.poor;
 
   const incomplete = snapshot?.isComplete === false;
   const bandLabel = incomplete
@@ -249,81 +231,47 @@ export function PsqiSleepQualityCard({ snapshot }: Props) {
         Tap the header for a full PSQI guide, scoring details, and your latest breakdown (when available).
       </Text>
 
-      <View style={styles.gaugeWrap}>
-        <Svg height={arcParams.h} width={arcParams.w}>
-          <Defs>
-            <SvgLinearGradient id="psqiGaugeGood" x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0%" stopColor="#10B981" />
-              <Stop offset="100%" stopColor="#059669" />
-            </SvgLinearGradient>
-            <SvgLinearGradient id="psqiGaugePoor" x1="0%" x2="100%" y1="0%" y2="0%">
-              <Stop offset="0%" stopColor="#F59E0B" />
-              <Stop offset="100%" stopColor="#DC2626" />
-            </SvgLinearGradient>
-          </Defs>
-          <Path
-            d={arcPath(arcParams.cx, arcParams.cy, arcParams.r, arcParams.θ0, arcParams.θ1)}
-            fill="none"
-            stroke={CARD.track}
-            strokeLinecap="butt"
-            strokeWidth={gaugeStroke}
-          />
-          {total !== null ? (
-            <Path
-              d={arcPath(arcParams.cx, arcParams.cy, arcParams.r, arcParams.θ0, arcParams.θScore)}
-              fill="none"
-              stroke={
-                band === "good"
-                  ? "url(#psqiGaugeGood)"
-                  : band === "moderate"
-                    ? "#F59E0B"
-                    : "url(#psqiGaugePoor)"
-              }
-              strokeLinecap="butt"
-              strokeWidth={gaugeStroke}
-            />
-          ) : null}
-          {[5, 10, 15].map((cut) => {
-            const f = cut / PSQI_GLOBAL_MAX;
-            const θ = arcParams.θ0 + arcParams.span * f;
-            const inner = polar(arcParams.cx, arcParams.cy, arcParams.r - gaugeStroke * 0.55, θ);
-            const outer = polar(arcParams.cx, arcParams.cy, arcParams.r + gaugeStroke * 0.55, θ);
-            return (
-              <Line
-                key={cut}
-                stroke="rgba(15,23,42,0.18)"
-                strokeWidth={tickStroke}
-                x1={inner.x}
-                x2={outer.x}
-                y1={inner.y}
-                y2={outer.y}
-              />
-            );
-          })}
-          {total !== null ? (
-            <Circle
-              cx={polar(arcParams.cx, arcParams.cy, arcParams.r, arcParams.θScore).x}
-              cy={polar(arcParams.cx, arcParams.cy, arcParams.r, arcParams.θScore).y}
-              fill={
-                band === "good"
-                  ? BAND_FILL.good
-                  : band === "moderate"
-                    ? BAND_FILL.moderate
-                    : BAND_FILL.poor
-              }
-              r={7}
-              stroke={colors.white}
-              strokeWidth={2}
-            />
-          ) : null}
-        </Svg>
+      <Pressable
+        accessibilityHint="Opens PSQI score history"
+        accessibilityLabel="PSQI sleep quality gauge. Open history"
+        accessibilityRole="button"
+        disabled={history.length === 0}
+        onPress={() => setHistoryOpen(true)}
+        style={({ pressed }) => [
+          styles.gaugeWrap,
+          history.length > 0 && pressed && { opacity: 0.94 },
+        ]}
+      >
+        <AnimatedArcGauge
+          animateKey={animateKey}
+          childrenDefs={
+            <>
+              <SvgLinearGradient id="psqiGaugeGood" x1="0%" x2="100%" y1="0%" y2="0%">
+                <Stop offset="0%" stopColor="#10B981" />
+                <Stop offset="100%" stopColor="#059669" />
+              </SvgLinearGradient>
+              <SvgLinearGradient id="psqiGaugePoor" x1="0%" x2="100%" y1="0%" y2="0%">
+                <Stop offset="0%" stopColor="#F59E0B" />
+                <Stop offset="100%" stopColor="#DC2626" />
+              </SvgLinearGradient>
+            </>
+          }
+          knobColor={knobColor}
+          layout={{ h: 132, cyOffset: 8, r: 96 }}
+          maxValue={PSQI_GLOBAL_MAX}
+          strokeLinecap="butt"
+          tickTotals={[5, 10, 15]}
+          trackStroke={CARD.track}
+          value={total}
+          valueStroke={total !== null ? valueStroke : undefined}
+        />
         <View style={styles.gaugeCenter}>
           <Text style={styles.scoreHuge}>
             {total !== null ? String(total) : "n/a"}
           </Text>
           <Text style={[styles.bandTag, typography.micro]}>{bandLabel}</Text>
         </View>
-      </View>
+      </Pressable>
 
       <View
         style={[
@@ -385,13 +333,12 @@ export function PsqiSleepQualityCard({ snapshot }: Props) {
                     const filled =
                       s !== null && s !== undefined && s > tier;
                     return (
-                      <View
+                      <AnimatedStackSegment
+                        animateKey={animateKey}
+                        color={tint}
+                        delayMs={PSQI_DOMAIN_ORDER.indexOf(id) * 70 + tier * 90}
+                        filled={filled}
                         key={tier}
-                        style={[
-                          styles.stackSeg,
-                          filled && { backgroundColor: tint },
-                          !filled && styles.stackSegEmpty,
-                        ]}
                       />
                     );
                   })}
@@ -430,13 +377,25 @@ export function PsqiSleepQualityCard({ snapshot }: Props) {
 
       <Text style={[styles.footerNote, typography.caption]}>
         Reference cutoffs commonly used in research: global total ≤5 suggests “good” sleep quality; &gt;5 suggests poor
-        sleep quality overall. Orientation only, not a diagnosis.
+        sleep quality overall.
       </Text>
 
       <PsqiEducationModal
         onClose={() => setModalOpen(false)}
         snapshot={snapshot}
         visible={modalOpen}
+      />
+      <ClinicalHistoryModal
+        caption="Global PSQI total over past submissions. Lower scores generally mean less sleep burden."
+        gradientId="psqiHistoryStroke"
+        lineColor={colors.primary}
+        lowerIsBetter
+        maxValue={PSQI_GLOBAL_MAX}
+        onClose={() => setHistoryOpen(false)}
+        points={history}
+        subtitle="PSQI history"
+        title="Sleep quality trend"
+        visible={historyOpen}
       />
     </View>
   );
@@ -651,15 +610,6 @@ const styles = StyleSheet.create({
     maxWidth: 38,
     gap: 3,
     alignSelf: "center",
-  },
-  stackSeg: {
-    height: 14,
-    borderRadius: radius.sm / 2,
-  },
-  stackSegEmpty: {
-    backgroundColor: "rgba(15, 23, 42, 0.07)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(15, 23, 42, 0.08)",
   },
   footerNote: {
     color: colors.textMuted,

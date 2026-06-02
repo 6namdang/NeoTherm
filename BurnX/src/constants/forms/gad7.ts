@@ -5,7 +5,6 @@ export const GAD7_FORM: ScaleQuestionnaireForm = {
   id: "gad7_v1",
   name: "GAD-7",
   description: "Anxiety screening. The time frame is shown above.",
-  assignmentCadenceDays: 7,
   scales: {
     gad7_frequency: {
       labels: [

@@ -6,7 +6,7 @@ export const LIBRE_FORM: ScaleQuestionnaireForm = {
   name: "LIBRE",
   description:
     "Life Impact Burn Recovery Evaluation: a brief patient-reported questionnaire for your clinical team.",
-  assignmentCadenceDays: 7,
+  assignmentWeeklyFullDays: [6],
   scales: {
     agreement: {
       labels: [

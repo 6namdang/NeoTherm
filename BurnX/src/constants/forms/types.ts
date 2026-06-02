@@ -49,6 +49,11 @@ export type ScaleQuestionnaireForm = {
    * Example: `{ hour: 18, minute: 30 }` → periods switch at 6:30 PM local. Takes precedence over `assignmentCadenceDays`.
    */
   assignmentDailyLocalStart?: AssignmentDailyLocalStart;
+  /**
+   * Assignable only on listed calendar weekdays, midnight–midnight local (`Date.getDay()`: 0 Sun … 6 Sat).
+   * Takes precedence over `assignmentCadenceDays` and `assignmentDailyLocalStart`.
+   */
+  assignmentWeeklyFullDays?: readonly number[];
 };
 
 /** Map of question `id` → chosen option index for `ScaleQuestionnaireForm`. */
@@ -61,22 +66,12 @@ export type VoiceCheckinTask = {
   durationMs: number;
 };
 
-/**
- * Care-program assignment window: card visible in `[slot, nextSlot)` in device local time.
- * `daysOfWeek` uses `Date.getDay()` (0 Sunday … 6 Saturday). Example: Mon/Wed/Fri → `[1, 3, 5]`.
- */
-export type WeeklyLocalAssignmentSlots = {
-  daysOfWeek: readonly number[];
-  hour: number;
-  minute: number;
-};
-
 export type VoiceCheckinForm = {
   id: string;
   name: string;
   description: string;
-  assignmentDaysOfWeek: readonly number[];
-  assignmentTimeOfDay: { hour: number; minute: number };
+  /** Assignable only on these weekdays, midnight–midnight local (`0` Sun … `6` Sat). Pilot: no overdue carryover. */
+  assignmentWeeklyFullDays: readonly number[];
   type: "voice";
   tasks: readonly VoiceCheckinTask[];
 };

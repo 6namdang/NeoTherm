@@ -3,6 +3,7 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Platform,
@@ -13,34 +14,18 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, {
-  Circle,
-  Defs,
-  LinearGradient,
-  Line,
-  Polyline,
-  Stop,
-} from "react-native-svg";
 import type { PainIntensityDashboardPoint } from "../../lib/pain-intensity-scoring";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
+import { AnimatedClinicalLineChart } from "./ui/AnimatedClinicalLineChart";
 
-const GRADIENT_ID = "painAvgHistoryStroke";
-
-const CHART_W = 320;
-const CHART_H = 200;
-const PAD_L = 8;
-const PAD_R = 8;
-const PAD_T = 8;
-const PAD_B = 8;
+const HEALTH_RED = colors.systemRed;
+const HEALTH_LABEL = "#000000";
 
 const fontSans = Platform.select({
   ios: "System",
   android: undefined,
 });
-
-const HEALTH_RED = colors.systemRed;
-const HEALTH_LABEL = "#000000";
 
 type Props = {
   visible: boolean;
@@ -50,92 +35,111 @@ type Props = {
 
 function formatTickDate(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "n/a";
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(d);
+}
+
+function formatAssessmentDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown date";
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
+    dateStyle: "medium",
+    timeStyle: "short",
   }).format(d);
 }
 
-function averageSeriesOldestFirst(
-  history: PainIntensityDashboardPoint[],
-): PainIntensityDashboardPoint[] {
-  const sorted = [...history].sort(
+function sortNewestFirst<T extends { createdAtIso: string }>(points: T[]): T[] {
+  return [...points].sort(
+    (a, b) => Date.parse(b.createdAtIso) - Date.parse(a.createdAtIso),
+  );
+}
+
+function sortOldestFirst<T extends { createdAtIso: string }>(points: T[]): T[] {
+  return [...points].sort(
     (a, b) => Date.parse(a.createdAtIso) - Date.parse(b.createdAtIso),
   );
-  return sorted.filter((p) => p.average0to4 !== null);
 }
 
-function averagePolylinePoints(series: PainIntensityDashboardPoint[]): string {
-  const n = series.length;
-  const innerW = CHART_W - PAD_L - PAD_R;
-  const innerH = CHART_H - PAD_T - PAD_B;
-
-  function xAt(i: number): number {
-    if (n <= 1) return PAD_L + innerW / 2;
-    return PAD_L + (i / (n - 1)) * innerW;
-  }
-
-  function yAt(level: number): number {
-    return PAD_T + innerH * (1 - level / 4);
-  }
-
-  const pts: string[] = [];
-  for (let i = 0; i < n; i += 1) {
-    const p = series[i];
-    const lvl = p.average0to4 ?? 0;
-    pts.push(`${xAt(i)},${yAt(lvl)}`);
-  }
-  return pts.join(" ");
+function averageSeries(points: PainIntensityDashboardPoint[]): PainIntensityDashboardPoint[] {
+  return points.filter((point) => point.average0to4 !== null);
 }
 
-function tickIndicesForCount(count: number): number[] {
-  if (count === 0) return [];
-  if (count <= 5) {
-    return [...Array(count).keys()];
-  }
-  const maxTicks = 5;
-  const out: number[] = [0];
-  for (let k = 1; k <= maxTicks - 2; k += 1) {
-    out.push(Math.round((k / (maxTicks - 1)) * (count - 1)));
-  }
-  out.push(count - 1);
-  return [...new Set(out)].sort((a, b) => a - b);
+function HistoryPager({
+  centerLabel,
+  index,
+  onNewer,
+  onOlder,
+  total,
+}: {
+  centerLabel?: string;
+  index: number;
+  onNewer: () => void;
+  onOlder: () => void;
+  total: number;
+}) {
+  if (total <= 1) return null;
+
+  return (
+    <View style={styles.pager}>
+      <Pressable
+        accessibilityLabel="Older check-in"
+        accessibilityRole="button"
+        disabled={index >= total - 1}
+        onPress={onOlder}
+        style={({ pressed }) => [
+          styles.pagerButton,
+          index >= total - 1 && styles.pagerButtonDisabled,
+          pressed && index < total - 1 && { opacity: 0.72 },
+        ]}
+      >
+        <Text style={styles.pagerButtonText}>Older</Text>
+      </Pressable>
+      {centerLabel ? (
+        <Text numberOfLines={1} style={styles.pagerLabel}>
+          {centerLabel}
+        </Text>
+      ) : null}
+      <Pressable
+        accessibilityLabel="Newer check-in"
+        accessibilityRole="button"
+        disabled={index <= 0}
+        onPress={onNewer}
+        style={({ pressed }) => [
+          styles.pagerButton,
+          index <= 0 && styles.pagerButtonDisabled,
+          pressed && index > 0 && { opacity: 0.72 },
+        ]}
+      >
+        <Text style={styles.pagerButtonText}>Newer</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 export function PainIntensityHistoryModal({ visible, onClose, history }: Props) {
   const insets = useSafeAreaInsets();
-  const chronological = averageSeriesOldestFirst(history);
-  const avgPointsStr = averagePolylinePoints(chronological);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const innerH = CHART_H - PAD_T - PAD_B;
-  const yLvl = [0, 1, 2, 3, 4].map((lvl) => PAD_T + innerH * (1 - lvl / 4));
+  const withAverage = useMemo(() => averageSeries(history), [history]);
+  const newestFirst = useMemo(() => sortNewestFirst(withAverage), [withAverage]);
+  const chronological = useMemo(() => sortOldestFirst(withAverage), [withAverage]);
+  const selected = newestFirst[selectedIndex] ?? null;
 
-  const dotNodes = chronological.map((p, i) => {
-    const n = chronological.length;
-    const innerW = CHART_W - PAD_L - PAD_R;
-    const xi =
-      n <= 1 ? PAD_L + innerW / 2 : PAD_L + (i / (n - 1)) * innerW;
+  const chartValues = chronological
+    .map((point) => point.average0to4)
+    .filter((value): value is number => value !== null);
+  const chartLabels = chronological.map((point) => formatTickDate(point.createdAtIso));
+  const animateKey = `${history.length}-${selected?.createdAtIso ?? "empty"}-${selectedIndex}`;
 
-    function yAt(level: number): number {
-      return PAD_T + innerH * (1 - level / 4);
-    }
+  useEffect(() => {
+    if (visible) setSelectedIndex(0);
+  }, [visible]);
 
-    const lvl = p.average0to4 ?? 0;
-    return (
-      <Circle
-        cx={xi}
-        cy={yAt(lvl)}
-        fill="#FFFFFF"
-        key={`${p.createdAtIso}-avg`}
-        r={5}
-        stroke={`url(#${GRADIENT_ID})`}
-        strokeWidth={2}
-      />
+  useEffect(() => {
+    setSelectedIndex((current) =>
+      Math.min(current, Math.max(newestFirst.length - 1, 0)),
     );
-  });
-
-  const tickIdx = tickIndicesForCount(chronological.length);
+  }, [newestFirst.length]);
 
   const presentationStyle =
     Platform.OS === "ios" ? ("pageSheet" as const) : undefined;
@@ -154,7 +158,7 @@ export function PainIntensityHistoryModal({ visible, onClose, history }: Props) 
         <View style={styles.modalHeader}>
           <View style={styles.modalHeaderTitles}>
             <Text style={styles.modalTitle}>Average pain</Text>
-            <Text style={styles.modalSub}>History. Past check-ins</Text>
+            <Text style={styles.modalSub}>History · past check-ins</Text>
           </View>
           <Pressable
             accessibilityLabel="Close"
@@ -173,91 +177,79 @@ export function PainIntensityHistoryModal({ visible, onClose, history }: Props) 
           style={styles.scroll}
         >
           <Text style={styles.detailCaption}>
-            “How intense was your average pain?” 0 lowest through 4 highest. Timeline: left is older, right is newer.
+            “How intense was your average pain?” 0 lowest through 4 highest. Use Older
+            and Newer to review each submission.
           </Text>
 
           {chronological.length === 0 ? (
             <Text style={styles.emptyChart}>
-              No check-ins with average pain answered yet; submit that item to build this chart.
+              No check-ins with average pain answered yet; submit that item to build
+              this chart.
             </Text>
           ) : (
             <>
-              <View style={styles.chartYRow}>
-                <View style={styles.yLabels}>
-                  {[4, 3, 2, 1, 0].map((lvl) => (
-                    <Text key={lvl} style={styles.yLab}>
-                      {lvl}
-                    </Text>
-                  ))}
+              {selected && selected.average0to4 !== null ? (
+                <View style={styles.snapshotCard}>
+                  <Text style={styles.snapshotDate}>
+                    {formatAssessmentDate(selected.createdAtIso)}
+                  </Text>
+                  <Text style={styles.snapshotValue}>
+                    {selected.average0to4}
+                  </Text>
+                  <Text style={styles.snapshotMeta}>Average pain (0 to 4)</Text>
+                  <View style={styles.metricRow}>
+                    <Metric
+                      label="Worst"
+                      value={
+                        selected.worst0to4 !== null ? String(selected.worst0to4) : "n/a"
+                      }
+                    />
+                    <Metric
+                      label="Current"
+                      value={
+                        selected.current0to4 !== null
+                          ? String(selected.current0to4)
+                          : "n/a"
+                      }
+                    />
+                  </View>
                 </View>
-                <View style={styles.svgBox}>
-                  <Svg height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`} width="100%">
-                    <Defs>
-                      <LinearGradient
-                        gradientUnits="userSpaceOnUse"
-                        id={GRADIENT_ID}
-                        x1={PAD_L}
-                        x2={CHART_W - PAD_R}
-                        y1={0}
-                        y2={0}
-                      >
-                        <Stop offset="0%" stopColor={colors.systemGray3} />
-                        <Stop offset="45%" stopColor={HEALTH_RED} />
-                        <Stop offset="100%" stopColor={HEALTH_RED} />
-                      </LinearGradient>
-                    </Defs>
-                    {[0, 1, 2, 3, 4].map((lvl) => (
-                      <Line
-                        key={`g-${lvl}`}
-                        stroke={colors.systemGray6}
-                        strokeWidth={
-                          lvl === 0 || lvl === 4 ? 1 : StyleSheet.hairlineWidth ?? 1
-                        }
-                        x1={PAD_L}
-                        x2={CHART_W - PAD_R}
-                        y1={yLvl[lvl]}
-                        y2={yLvl[lvl]}
-                      />
-                    ))}
-                    {chronological.length >= 2 ? (
-                      <Polyline
-                        fill="none"
-                        points={avgPointsStr}
-                        stroke={`url(#${GRADIENT_ID})`}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={3}
-                      />
-                    ) : null}
-                    {dotNodes}
-                  </Svg>
-                </View>
-              </View>
+              ) : null}
 
-              <View style={styles.xTicksRow}>
-                {tickIdx.map((idx) => {
-                  const p = chronological[idx];
-                  if (!p) return null;
-                  return (
-                    <Text key={`${p.createdAtIso}-${idx}`} style={styles.xTick}>
-                      {formatTickDate(p.createdAtIso)}
-                    </Text>
-                  );
-                })}
-              </View>
+              <HistoryPager
+                centerLabel={
+                  selected ? formatAssessmentDate(selected.createdAtIso) : undefined
+                }
+                index={selectedIndex}
+                onNewer={() => setSelectedIndex((cur) => Math.max(cur - 1, 0))}
+                onOlder={() =>
+                  setSelectedIndex((cur) =>
+                    Math.min(cur + 1, Math.max(newestFirst.length - 1, 0)),
+                  )
+                }
+                total={newestFirst.length}
+              />
+
+              <AnimatedClinicalLineChart
+                animateKey={animateKey}
+                gradientId="painAvgHistoryStroke"
+                interactive
+                labels={chartLabels}
+                lineColor={HEALTH_RED}
+                maxValue={4}
+                values={chartValues}
+              />
 
               <View style={styles.legendCapsule}>
                 <View style={styles.legendStripe} />
-                <Text style={styles.legendText}>
-                  Average pain (0 to 4)
-                </Text>
+                <Text style={styles.legendText}>Average pain (0 to 4)</Text>
               </View>
             </>
           )}
 
           <Text style={styles.footnote}>
-            {chronological.length} snapshot{chronological.length === 1 ? "" : "s"} with average pain. Orientation
-            only.
+            {chronological.length} snapshot{chronological.length === 1 ? "" : "s"} with
+            average pain.
           </Text>
           <View style={{ height: spacing.xl }} />
         </ScrollView>
@@ -287,6 +279,15 @@ export function PainIntensityHistoryModal({ visible, onClose, history }: Props) 
         <View style={styles.iosWrap}>{body}</View>
       )}
     </Modal>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -371,42 +372,94 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: spacing.xl,
   },
-  chartYRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
+  snapshotCard: {
+    borderRadius: 18,
+    backgroundColor: colors.systemGray6,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    alignItems: "center",
     gap: spacing.xs,
   },
-  yLabels: {
-    width: 22,
-    justifyContent: "space-between",
-    paddingVertical: PAD_T + 4,
-    paddingBottom: PAD_B + 4,
+  snapshotDate: {
+    fontFamily: fontSans,
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.systemGray,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "center",
   },
-  yLab: {
+  snapshotValue: {
+    fontFamily: fontSans,
+    fontSize: 42,
+    fontWeight: "700",
+    color: HEALTH_LABEL,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -1,
+  },
+  snapshotMeta: {
+    fontFamily: fontSans,
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.systemGray,
+  },
+  metricRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    width: "100%",
+  },
+  metric: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    alignItems: "center",
+    gap: 4,
+  },
+  metricLabel: {
     fontFamily: fontSans,
     fontSize: 11,
     fontWeight: "600",
     color: colors.systemGray,
+    textTransform: "uppercase",
+  },
+  metricValue: {
+    fontFamily: fontSans,
+    fontSize: 20,
+    fontWeight: "700",
+    color: HEALTH_LABEL,
     fontVariant: ["tabular-nums"],
-    textAlign: "right",
   },
-  svgBox: {
-    flex: 1,
-    minWidth: 0,
-  },
-  xTicksRow: {
+  pager: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
-    marginTop: spacing.sm,
-    paddingLeft: 30,
+    marginBottom: spacing.md,
   },
-  xTick: {
+  pagerButton: {
+    borderRadius: 10,
+    backgroundColor: colors.systemGray6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  pagerButtonDisabled: {
+    opacity: 0.4,
+  },
+  pagerButtonText: {
     fontFamily: fontSans,
-    fontSize: 11,
+    fontSize: 13,
+    fontWeight: "600",
+    color: HEALTH_LABEL,
+  },
+  pagerLabel: {
+    flex: 1,
+    fontFamily: fontSans,
+    fontSize: 12,
     fontWeight: "500",
     color: colors.systemGray,
+    textAlign: "center",
   },
   legendCapsule: {
     flexDirection: "row",

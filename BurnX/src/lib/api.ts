@@ -4,7 +4,6 @@ import { API_BASE_URL } from "../../aws-config";
 import { getValidIdToken, refreshSession } from "./auth";
 import { bxLog } from "./debug-log";
 import type { FormScheduleResponse } from "./ema-schedule-types";
-import type { WoundVlmAnalysis } from "../types/wound-vlm-analysis";
 
 function apiHostHint(): string {
   try {
@@ -35,11 +34,11 @@ export function explainReachabilityError(error: unknown): string {
 
   const isWeb = Platform.OS === "web";
   const webHint = isWeb
-    ? " If you're in a browser, try again or switch to the mobile app. Ask IT if the BurnX server address is correct."
+    ? " If you're in a browser, try again or switch to the mobile app. Ask IT if the NeoTherm server address is correct."
     : "";
 
   return (
-    `We couldn't reach BurnX (${apiHostHint()}). ` +
+    `We couldn't reach NeoTherm (${apiHostHint()}). ` +
     "Check your Wi-Fi, cellular data, or VPN." +
     webHint
   );
@@ -80,6 +79,12 @@ export type MeResponse = {
   onboarding_completed: boolean;
   name?: string;
   hospital_id?: string;
+  /** Optional display facility from GET /me (falls back to hospital catalog). */
+  facility?: string;
+  /** Optional role label from GET /me (falls back to JWT / profile title). */
+  role?: string;
+  /** Optional last clinical visit or app engagement timestamp (ISO). */
+  last_visit_at?: string;
   /** Clinician profile when returned by GET /me. */
   title?: string;
   specialty?: string;
@@ -314,6 +319,16 @@ export async function createMe(body: CreateMeBody): Promise<void> {
   bxLog("api", "createMe → ok");
 }
 
+/** Permanently deletes the signed-in user's profile and associated server-side patient data. */
+export async function deleteMe(): Promise<void> {
+  bxLog("api", "deleteMe()");
+  const response = await authFetch("/me", { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  bxLog("api", "deleteMe → ok");
+}
+
 export async function submitFormResponse(payload: FormResponsePayload): Promise<unknown> {
   bxLog("api", "submitFormResponse()", {
     form_id: payload.form_id,
@@ -454,12 +469,19 @@ export async function getFormSchedule(params: {
     throw new Error(await readErrorMessage(response));
   }
   const body = (await response.json()) as FormScheduleResponse;
-  if (
-    typeof body.date !== "string" ||
-    !Array.isArray(body.slots) ||
-    typeof body.n4_audit_utc !== "string"
-  ) {
+  if (typeof body.date !== "string" || !Array.isArray(body.slots)) {
     throw new Error("Unexpected /form-schedule response shape.");
+  }
+  for (const slot of body.slots) {
+    if (
+      typeof slot.slot_id !== "string" ||
+      !Array.isArray(slot.form_ids) ||
+      typeof slot.local_open_time !== "string" ||
+      typeof slot.local_close_time !== "string" ||
+      typeof slot.n1_utc !== "string"
+    ) {
+      throw new Error("Unexpected /form-schedule slot shape.");
+    }
   }
   bxLog("api", "getFormSchedule → ok", {
     date: body.date,
@@ -561,260 +583,3 @@ export async function getPatientFormResponses(params: {
     if (tid !== null) clearTimeout(tid);
   }
 }
-
-export type WoundImage = {
-  hospital_id: string;
-  sk: string;
-  image_id: string;
-  patient_id: string;
-  recorded_at: string;
-  s3_key: string;
-  body_location: string | null;
-  notes: string | null;
-  processed_at: string | null;
-  vlm_analysis: WoundVlmAnalysis | null;
-  vlm_model?: string;
-  created_at: string;
-};
-
-function parseWoundImageRow(o: Record<string, unknown>): WoundImage | null {
-  const str = (v: unknown): string => {
-    if (typeof v === "string") return v.trim();
-    if (typeof v === "number" && Number.isFinite(v)) return String(v);
-    return "";
-  };
-
-  const imageId = str(o.image_id) || str(o.imageId);
-  if (imageId === "") return null;
-
-  const sk = str(o.sk);
-  const hospitalId = str(o.hospital_id) || str(o.hospitalId);
-  const patientId = str(o.patient_id) || str(o.patientId);
-  if (sk === "" || hospitalId === "" || patientId === "") return null;
-
-  const s3Key = str(o.s3_key) || str(o.s3Key);
-  if (s3Key === "") return null;
-
-  const recordedAtRaw = o.recorded_at ?? o.recordedAt;
-  const recordedAt =
-    typeof recordedAtRaw === "string"
-      ? recordedAtRaw.trim()
-      : typeof recordedAtRaw === "number" && Number.isFinite(recordedAtRaw)
-        ? new Date(recordedAtRaw).toISOString()
-        : "";
-
-  const createdAtRaw = o.created_at ?? o.createdAt;
-  const createdAt =
-    typeof createdAtRaw === "string"
-      ? createdAtRaw.trim()
-      : typeof createdAtRaw === "number" && Number.isFinite(createdAtRaw)
-        ? new Date(createdAtRaw).toISOString()
-        : "";
-
-  const processedAtRaw = o.processed_at ?? o.processedAt;
-  const processed_at =
-    processedAtRaw === null || processedAtRaw === undefined
-      ? null
-      : typeof processedAtRaw === "string"
-        ? processedAtRaw.trim() || null
-        : typeof processedAtRaw === "number" && Number.isFinite(processedAtRaw)
-          ? new Date(processedAtRaw).toISOString()
-          : null;
-
-  const bodyLocationRaw = o.body_location ?? o.bodyLocation;
-  const body_location =
-    bodyLocationRaw === null || bodyLocationRaw === undefined
-      ? null
-      : typeof bodyLocationRaw === "string"
-        ? bodyLocationRaw.trim() || null
-        : null;
-
-  const notesRaw = o.notes;
-  const notes =
-    notesRaw === null || notesRaw === undefined
-      ? null
-      : typeof notesRaw === "string"
-        ? notesRaw.trim() || null
-        : null;
-
-  const vlmRaw = o.vlm_analysis ?? o.vlmAnalysis;
-  let vlm_analysis: WoundVlmAnalysis | null = null;
-  if (vlmRaw !== null && vlmRaw !== undefined && typeof vlmRaw === "object") {
-    vlm_analysis = vlmRaw as WoundVlmAnalysis;
-  }
-
-  const vlmModelRaw = o.vlm_model ?? o.vlmModel;
-  const vlmModel =
-    typeof vlmModelRaw === "string" && vlmModelRaw.trim() !== ""
-      ? vlmModelRaw.trim()
-      : undefined;
-
-  return {
-    hospital_id: hospitalId,
-    sk,
-    image_id: imageId,
-    patient_id: patientId,
-    recorded_at:
-      recordedAt !== ""
-        ? recordedAt
-        : createdAt !== ""
-          ? createdAt
-          : new Date(0).toISOString(),
-    s3_key: s3Key,
-    body_location,
-    notes,
-    processed_at,
-    vlm_analysis,
-    vlm_model: vlmModel,
-    created_at: createdAt !== "" ? createdAt : recordedAt !== "" ? recordedAt : new Date(0).toISOString(),
-  };
-}
-
-function parseWoundImagesListBody(payload: unknown): {
-  items: WoundImage[];
-  count: number;
-} {
-  if (typeof payload !== "object" || payload === null) {
-    return { items: [], count: 0 };
-  }
-  const raw = payload as { items?: unknown; count?: unknown };
-  const arr = raw.items;
-  const items: WoundImage[] = [];
-  if (Array.isArray(arr)) {
-    for (const row of arr) {
-      if (typeof row !== "object" || row === null) continue;
-      const w = parseWoundImageRow(row as Record<string, unknown>);
-      if (w !== null) items.push(w);
-    }
-  }
-  const cn = raw.count;
-  const count =
-    typeof cn === "number" && Number.isFinite(cn) ? cn : items.length;
-  return { items, count };
-}
-
-export async function getWoundImageUploadUrl(): Promise<{
-  image_id: string;
-  key: string;
-  url: string;
-}> {
-  bxLog("api", "getWoundImageUploadUrl");
-  const response = await authFetch("/wound-images/upload-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-  const data = (await response.json()) as Record<string, unknown>;
-  const image_id =
-    typeof data.image_id === "string"
-      ? data.image_id.trim()
-      : typeof data.image_id === "number"
-        ? String(data.image_id).trim()
-        : "";
-  const key = typeof data.key === "string" ? data.key.trim() : "";
-  const url = typeof data.url === "string" ? data.url.trim() : "";
-  if (image_id === "" || key === "" || url === "") {
-    throw new Error("Wound upload URL response was missing image_id, key, or url.");
-  }
-  bxLog("api", "getWoundImageUploadUrl → ok");
-  return { image_id, key, url };
-}
-
-export async function submitWoundImage(params: {
-  image_id: string;
-  s3_key: string;
-  body_location?: string;
-  notes?: string;
-  /** Client-reported capture time (ISO); optional if API stores server time only. */
-  recorded_at?: string;
-}): Promise<{ success: boolean; image_id: string }> {
-  bxLog("api", "submitWoundImage", { image_id: params.image_id });
-  const response = await authFetch("/wound-images", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      image_id: params.image_id,
-      s3_key: params.s3_key,
-      ...(params.body_location !== undefined && params.body_location !== ""
-        ? { body_location: params.body_location }
-        : {}),
-      ...(params.notes !== undefined && params.notes !== "" ? { notes: params.notes } : {}),
-      ...(params.recorded_at !== undefined &&
-      typeof params.recorded_at === "string" &&
-      params.recorded_at.trim() !== ""
-        ? { recorded_at: params.recorded_at.trim() }
-        : {}),
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-  const json = (await response.json()) as Record<string, unknown>;
-  const success = Boolean(json.success);
-  const image_id =
-    typeof json.image_id === "string"
-      ? json.image_id.trim()
-      : typeof json.image_id === "number"
-        ? String(json.image_id).trim()
-        : params.image_id;
-  bxLog("api", "submitWoundImage → ok");
-  return { success, image_id };
-}
-
-export async function getMyWoundImages(limit = 50): Promise<{
-  items: WoundImage[];
-  count: number;
-}> {
-  const query = new URLSearchParams();
-  query.set("limit", String(limit));
-  const path = `/wound-images?${query.toString()}`;
-  bxLog("api", "getMyWoundImages", { limit });
-  const response = await authFetch(path, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-  const body = await response.json();
-  const parsed = parseWoundImagesListBody(body);
-  bxLog("api", "getMyWoundImages → ok", { count: parsed.count });
-  return parsed;
-}
-
-export async function getWoundImageViewUrl(imageId: string): Promise<{ url: string }> {
-  const enc = encodeURIComponent(imageId);
-  const path = `/wound-images/${enc}/view-url`;
-  // Full URL helps correlate Metro logs with API Gateway (path matches POST .../view-url).
-  bxLog("api", "getWoundImageViewUrl", { imageId, postUrl: `${API_BASE_URL}${path}` });
-  const response = await authFetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-  const json = (await response.json()) as Record<string, unknown>;
-  const url =
-    (typeof json.url === "string" && json.url.trim()) ||
-    (typeof json.view_url === "string" && json.view_url.trim()) ||
-    (typeof json.viewUrl === "string" && json.viewUrl.trim()) ||
-    (typeof json.presigned_url === "string" && json.presigned_url.trim()) ||
-    (typeof json.presignedUrl === "string" && json.presignedUrl.trim()) ||
-    "";
-  if (url === "") {
-    bxLog("api", "getWoundImageViewUrl: missing url in body keys", Object.keys(json));
-    throw new Error("View URL response was missing url.");
-  }
-  bxLog("api", "getWoundImageViewUrl → ok");
-  return { url };
-}
-
-export type {
-  WoundVlmAnalysis,
-  WoundVlmAnalysisFailure,
-  WoundVlmAnalysisScores,
-  WoundVlmAnalysisSuccess,
-} from "../types/wound-vlm-analysis";
-export { isVlmFailure, isVlmSuccess } from "../types/wound-vlm-analysis";

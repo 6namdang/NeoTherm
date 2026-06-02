@@ -3,14 +3,14 @@ import { ALL_EMA_FORMS } from "../ema-forms";
 import { FATIGUE_FORM } from "./fatigue";
 import { GAD7_FORM } from "./gad7";
 import { LIBRE_FORM } from "./libre";
+import { LONG_ASSESSMENT_FORM } from "./long-assessment";
+import { MOCA_FORM } from "./moca";
 import { PAIN_INTENSITY_FORM } from "./pain-intensity";
 import { PAIN_INFERENCE_FORM } from "./pain-inference";
 import { PSQI_FORM } from "./psqi";
-import { VOICE_CHECKIN_FORM } from "./voice-checkin";
 import type {
   ScaleQuestionnaireForm,
   AssignmentDailyLocalStart,
-  WeeklyLocalAssignmentSlots,
 } from "./types";
 
 /** Registered scale questionnaires (Care programs). Order = list order. */
@@ -24,6 +24,9 @@ export const ALL_FORMS: readonly ScaleQuestionnaireForm[] = [
   GAD7_FORM,
 ];
 
+/** Scale forms with their own assignment schedule (LIBRE weekly). */
+const ASSIGNABLE_SCALE_FORMS: readonly ScaleQuestionnaireForm[] = [LIBRE_FORM];
+
 export const FORMS_BY_ID: Record<string, ScaleQuestionnaireForm> =
   Object.fromEntries([
     ...ALL_FORMS.map((f) => [f.id, f] as const),
@@ -31,13 +34,23 @@ export const FORMS_BY_ID: Record<string, ScaleQuestionnaireForm> =
   ]);
 
 export function getFormById(id: string): ScaleQuestionnaireForm | undefined {
+  if (id === MOCA_FORM.id) {
+    return {
+      id: MOCA_FORM.id,
+      name: MOCA_FORM.name,
+      description: MOCA_FORM.description,
+      sections: [],
+      scales: {},
+    };
+  }
   return FORMS_BY_ID[id];
 }
 
 /** Care-program `form_id` values that appear on patient dashboard / assignments. */
 export const ASSIGNABLE_CARE_FORM_IDS: ReadonlySet<string> = new Set([
-  ...ALL_FORMS.map((f) => f.id),
+  ...ASSIGNABLE_SCALE_FORMS.map((f) => f.id),
   ...ALL_EMA_FORMS.map((f) => f.id),
+  LONG_ASSESSMENT_FORM.id,
 ]);
 
 export type FormDefinition = {
@@ -46,32 +59,23 @@ export type FormDefinition = {
   description: string;
   assignmentCadenceDays?: number;
   assignmentDailyLocalStart?: AssignmentDailyLocalStart;
-  /**
-   * Mon/Wed/Fri-style visibility: assignment row appears only between this local slot boundary
-   * and the next; completions do not gate visibility (see Assignments loader).
-   */
-  assignmentWeeklyLocalSlots?: WeeklyLocalAssignmentSlots;
+  /** Calendar-day assignment windows (0=Sun … 6=Sat), midnight–midnight local. */
+  assignmentWeeklyFullDays?: readonly number[];
 };
 
-const scaleAssignments: FormDefinition[] = ALL_FORMS.map((f) => ({
+const scaleAssignments: FormDefinition[] = ASSIGNABLE_SCALE_FORMS.map((f) => ({
   id: f.id,
   title: f.name,
   description: f.description,
   assignmentCadenceDays: f.assignmentCadenceDays,
   assignmentDailyLocalStart: f.assignmentDailyLocalStart,
+  assignmentWeeklyFullDays: f.assignmentWeeklyFullDays,
 }));
 
-const voiceWeeklySlots: WeeklyLocalAssignmentSlots = {
-  daysOfWeek: [...VOICE_CHECKIN_FORM.assignmentDaysOfWeek],
-  hour: VOICE_CHECKIN_FORM.assignmentTimeOfDay.hour,
-  minute: VOICE_CHECKIN_FORM.assignmentTimeOfDay.minute,
-};
-
-const voiceAssignment: FormDefinition = {
-  id: VOICE_CHECKIN_FORM.id,
-  title: VOICE_CHECKIN_FORM.name,
-  description: VOICE_CHECKIN_FORM.description,
-  assignmentWeeklyLocalSlots: voiceWeeklySlots,
+const longAssessmentAssignment: FormDefinition = {
+  id: LONG_ASSESSMENT_FORM.id,
+  title: LONG_ASSESSMENT_FORM.name,
+  description: LONG_ASSESSMENT_FORM.description,
 };
 
 const emaAssignments: FormDefinition[] = ALL_EMA_FORMS.map((f) => ({
@@ -80,9 +84,9 @@ const emaAssignments: FormDefinition[] = ALL_EMA_FORMS.map((f) => ({
   description: f.description,
 }));
 
-/** Patient Care programmes list (scale questionnaires + Voice Check-In). */
+/** Patient Care programmes list (EMA + LIBRE + Long Assessment bundle; Voice is on the Voice tab). */
 export const forms: FormDefinition[] = [
-  voiceAssignment,
   ...emaAssignments,
   ...scaleAssignments,
+  longAssessmentAssignment,
 ];

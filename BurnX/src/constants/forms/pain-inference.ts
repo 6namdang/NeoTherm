@@ -9,7 +9,6 @@ export const PAIN_INFERENCE_FORM: ScaleQuestionnaireForm = {
   name: "Pain interference",
   description:
     "How much pain interfered with daily life. The time frame is shown above.",
-  assignmentCadenceDays: 7,
   scales: {
     interference_7d: {
       labels: [

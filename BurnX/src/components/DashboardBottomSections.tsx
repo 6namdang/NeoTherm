@@ -5,6 +5,7 @@ import { Button } from "./Button";
 import { Card } from "./Card";
 import { TrustFooter } from "./TrustFooter";
 import { colors } from "../theme/colors";
+import { careProgramFormHref } from "../lib/care-program-form-groups";
 import { radius, spacing } from "../theme/spacing";
 import { typography } from "../theme/typography";
 
@@ -22,6 +23,7 @@ const ICON_FOR_FORM: Record<string, keyof typeof Ionicons.glyphMap> = {
   cognitive_function_v1: "bulb-outline",
   fatigue_v1: "battery-half-outline",
   gad7_v1: "alert-circle-outline",
+  long_assessment_v1: "layers-outline",
 };
 
 type DashboardBottomSectionsProps = {
@@ -92,7 +94,7 @@ function CareProgramRow({
       accessibilityHint={row.pending ? "Questionnaire may be due" : "Recently on record"}
       accessibilityLabel={`${row.title}, ${row.pending ? "needs completion" : "complete"}`}
       accessibilityRole="button"
-      onPress={() => router.push(`/forms/${row.id}` as Href)}
+      onPress={() => router.push(careProgramFormHref(row.id))}
       style={({ pressed }) => [
         styles.rowPress,
         !isFirst && styles.rowDivider,

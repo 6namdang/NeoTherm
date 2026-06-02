@@ -1,8 +1,16 @@
-import { StyleSheet, Text, View } from "react-native";
-import { colors } from "../theme/colors";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+
+import { titleCaseRole } from "../lib/welcome-meta";
 import { fontFamily } from "../theme/fontFamily";
 import { spacing } from "../theme/spacing";
-import { typography } from "../theme/typography";
+
+const IOS_BLACK = "#000000";
+const IOS_SYSTEM_BLUE = "#007AFF";
+const IOS_BADGE_RED = "#FF3B30";
+const IOS_SUBLINE = "#8E8E93";
+
+const AVATAR = 42;
+const BADGE = 10;
 
 function greetingForHour(date: Date): string {
   const h = date.getHours();
@@ -20,7 +28,6 @@ function parseFirstWordTitleCase(displayName: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-/** First letter suitable for avatar (handles leading punctuation / spaces). */
 function initialFromName(displayName: string): string {
   const t = displayName.trim();
   if (!t) return "?";
@@ -28,94 +35,175 @@ function initialFromName(displayName: string): string {
   return match ? match[0].toUpperCase() : t.charAt(0).toUpperCase();
 }
 
+function formatLastVisit(days: number): string {
+  if (days <= 0) return "Last visit today";
+  if (days === 1) return "Last visit 1 day ago";
+  return `Last visit ${days} days ago`;
+}
+
+export function buildWelcomeSubline(params: {
+  facility?: string | null;
+  role?: string | null;
+  lastVisitDaysAgo?: number | null;
+  burnDayLabel?: string | null;
+}): string | null {
+  const parts: string[] = [];
+  const burnDay =
+    typeof params.burnDayLabel === "string" ? params.burnDayLabel.trim() : "";
+  if (burnDay !== "") parts.push(burnDay);
+  const facility =
+    typeof params.facility === "string" ? params.facility.trim() : "";
+  const role =
+    typeof params.role === "string" ? titleCaseRole(params.role) : "";
+  if (facility !== "") parts.push(facility);
+  if (role !== "") parts.push(role);
+  if (
+    params.lastVisitDaysAgo !== null &&
+    params.lastVisitDaysAgo !== undefined &&
+    Number.isFinite(params.lastVisitDaysAgo)
+  ) {
+    parts.push(formatLastVisit(Math.max(0, Math.floor(params.lastVisitDaysAgo))));
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 type Props = {
-  /** Prefer `me.name` from PostAuth once onboarding completed. */
   name?: string | null;
+  facility?: string | null;
+  role?: string | null;
+  lastVisitDaysAgo?: number | null;
+  burnDayLabel?: string | null;
+  unreadCount?: number;
+  onAccountPress?: () => void;
 };
 
-/** Time-based greeting plus circular initial avatar (patient & doctor dashboards). */
-export function DashboardWelcomeHeader({ name }: Props) {
+/** iOS 26-style dashboard greeting with facility context and account avatar. */
+export function DashboardWelcomeHeader({
+  name,
+  facility,
+  role,
+  lastVisitDaysAgo,
+  burnDayLabel,
+  unreadCount = 0,
+  onAccountPress,
+}: Props) {
   const trimmed = typeof name === "string" ? name.trim() : "";
   const displayName = trimmed ? parseFirstWordTitleCase(trimmed) : "";
   const greeting = greetingForHour(new Date());
   const initial = trimmed ? initialFromName(trimmed) : "?";
+  const headline =
+    displayName !== "" ? `${greeting}, ${displayName}` : greeting;
+  const subline = buildWelcomeSubline({
+    facility,
+    role,
+    lastVisitDaysAgo,
+    burnDayLabel,
+  });
+  const showBadge = unreadCount > 0;
 
   return (
     <View style={styles.row}>
       <View style={styles.textCol} accessibilityRole="header">
-        {displayName ? (
-          <Text style={[styles.greetingWrap, typography.headlineMedium]}>
-            <Text style={styles.greetingMuted}>{`${greeting}, `}</Text>
-            <Text style={styles.namePart}>{displayName}</Text>
-          </Text>
-        ) : (
-          <Text style={[styles.headlineAlone, typography.headlineMedium]}>
-            {greeting}
-          </Text>
-        )}
+        <Text style={styles.headline}>{headline}</Text>
+        {subline ? <Text style={styles.subline}>{subline}</Text> : null}
       </View>
-      <View
-        style={styles.avatar}
-        accessibilityLabel={
-          displayName ? `Avatar, ${initial} for ${displayName}` : "Avatar, no name"
-        }
-      >
-        <Text style={styles.avatarLetter}>{initial}</Text>
+      <View style={styles.avatarWrap}>
+        <Pressable
+          style={styles.avatar}
+          accessibilityRole="button"
+          accessibilityLabel={
+            displayName
+              ? `Open account menu for ${displayName}`
+              : "Open account menu"
+          }
+          onPress={onAccountPress}
+        >
+          <Text style={styles.avatarLetter}>{initial}</Text>
+        </Pressable>
+        {showBadge ? (
+          <View style={styles.badge} accessibilityLabel="Unread alerts" />
+        ) : null}
       </View>
     </View>
   );
 }
 
-const AVATAR = 52;
-
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: spacing.md,
-    marginBottom: spacing.sm + 2,
+    gap: 12,
+    marginBottom: spacing.lg,
+    width: "100%",
+    alignSelf: "stretch",
   },
   textCol: {
     flex: 1,
     minWidth: 0,
-    paddingRight: spacing.xs,
+    paddingRight: 4,
+    paddingTop: 2,
+  },
+  headline: {
+    color: IOS_BLACK,
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    lineHeight: 34,
+    ...Platform.select({
+      ios: { fontFamily: undefined },
+      android: { fontFamily: fontFamily.bold },
+      default: { fontFamily: fontFamily.bold },
+    }),
+  },
+  subline: {
+    marginTop: 3,
+    color: IOS_SUBLINE,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "400",
+    ...Platform.select({
+      ios: { fontFamily: undefined },
+      android: { fontFamily: fontFamily.regular },
+      default: { fontFamily: fontFamily.regular },
+    }),
+  },
+  avatarWrap: {
+    width: AVATAR,
+    height: AVATAR,
+    flexShrink: 0,
+    alignItems: "center",
     justifyContent: "center",
-  },
-  greetingWrap: {
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  greetingMuted: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.medium,
-    fontSize: 26,
-    letterSpacing: -0.45,
-    lineHeight: 32,
-  },
-  namePart: {
-    color: colors.text,
-    fontFamily: fontFamily.bold,
-    fontSize: 26,
-    letterSpacing: -0.45,
-    lineHeight: 32,
-  },
-  headlineAlone: {
-    color: colors.textSecondary,
+    marginTop: 2,
   },
   avatar: {
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
-    backgroundColor: colors.primary,
+    backgroundColor: IOS_SYSTEM_BLUE,
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
   },
   avatarLetter: {
-    color: colors.primaryForeground,
-    fontFamily: fontFamily.bold,
-    fontSize: 20,
-    letterSpacing: 0.2,
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: 0.1,
+    ...Platform.select({
+      ios: { fontFamily: undefined },
+      android: { fontFamily: fontFamily.semiBold },
+      default: { fontFamily: fontFamily.semiBold },
+    }),
+  },
+  badge: {
+    position: "absolute",
+    top: -1,
+    right: -1,
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    backgroundColor: IOS_BADGE_RED,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
 });

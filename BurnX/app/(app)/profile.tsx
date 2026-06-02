@@ -1,7 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { router, type Href } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -10,9 +14,18 @@ import { StatusBar } from "expo-status-bar";
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
 import { PageHeader } from "../../src/components/PageHeader";
+import {
+  PatientIntakePrivacyBanner,
+  PatientIntakeRecord,
+} from "../../src/components/profile/PatientIntakeRecord";
 import { Screen } from "../../src/components/Screen";
 import { TrustFooter } from "../../src/components/TrustFooter";
 import { hospitals } from "../../src/constants/hospitals";
+import {
+  buildPatientProfileSections,
+  loadPatientIntakeRecord,
+  type PatientIntakeRecord as IntakeRecord,
+} from "../../src/lib/patient-intake-display";
 import { usePostAuth } from "../../src/lib/post-auth-context";
 import { useSession } from "../../src/lib/auth-context";
 import { decodeJwtPayload } from "../../src/lib/jwt";
@@ -43,6 +56,10 @@ export default function ProfileScreen() {
   const { role, signOut } = useSession();
   const { me, ready } = usePostAuth();
   const [jwtEmail, setJwtEmail] = useState<string | null>(null);
+  const [intake, setIntake] = useState<IntakeRecord | null>(null);
+  const [intakeLoading, setIntakeLoading] = useState(false);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isDoctor = role === "doctor";
 
@@ -62,6 +79,38 @@ export default function ProfileScreen() {
     };
   }, []);
 
+  const loadIntake = useCallback(async () => {
+    if (isDoctor) {
+      setIntake(null);
+      setIntakeError(null);
+      return;
+    }
+    setIntakeLoading(true);
+    setIntakeError(null);
+    try {
+      setIntake(await loadPatientIntakeRecord());
+    } catch {
+      setIntakeError("We couldn't reach NeoTherm securely right now.");
+    } finally {
+      setIntakeLoading(false);
+    }
+  }, [isDoctor]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadIntake();
+    }, [loadIntake]),
+  );
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadIntake();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadIntake]);
+
   const displayName = useMemo(() => {
     const trimmed = typeof me?.name === "string" ? me.name.trim() : "";
     if (trimmed !== "") return trimmed;
@@ -76,6 +125,15 @@ export default function ProfileScreen() {
     return name ?? `Organization on file (${id})`;
   }, [me?.hospital_id]);
 
+  const profileSections = useMemo(() => {
+    if (isDoctor) return [];
+    return buildPatientProfileSections({
+      name: me?.name,
+      hospitalId: me?.hospital_id,
+      intakeAnswers: intake?.answers ?? {},
+    });
+  }, [intake?.answers, isDoctor, me?.hospital_id, me?.name]);
+
   const avatarLetters = initialsFromName(me?.name ?? displayName);
 
   const profileChip = isDoctor ? "Clinician signed in" : "Patient signed in";
@@ -84,16 +142,34 @@ export default function ProfileScreen() {
     me?.onboarding_completed === true
       ? isDoctor
         ? "Clinical tools use your verified hospital role."
-        : "Recovery questionnaires use your verified patient profile."
-      : "Finish onboarding so your hospital and profile details stay in sync across devices.";
+        : "Your onboarding answers are stored with your burn center and shown below."
+      : "Finish onboarding so your profile and clinical intake appear here.";
 
   return (
-    <Screen animateEntry preset="tabs" scroll>
+    <Screen
+      animateEntry
+      preset="tabs"
+      scroll
+      refreshControl={
+        !isDoctor ? (
+          <RefreshControl
+            colors={[colors.primary]}
+            onRefresh={refresh}
+            refreshing={refreshing}
+            tintColor={colors.primary}
+          />
+        ) : undefined
+      }
+    >
       <StatusBar style="dark" />
 
       <PageHeader
         eyebrow="Your account"
-        subtitle="BurnX checks login with your organization's security policies on each refresh."
+        subtitle={
+          isDoctor
+            ? "NeoTherm checks login with your organization's security policies on each refresh."
+            : "Review the onboarding information you shared — encrypted and visible only while signed in."
+        }
         title="Profile & settings"
       />
 
@@ -129,31 +205,84 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Card variant="outline" style={styles.infoCard}>
-            <InfoRow
-              icon="business-outline"
-              label="Hospital"
-              value={hospitalLabel}
-            />
-            <View style={styles.divider} />
-            <InfoRow
-              icon="lock-closed-outline"
-              label="Access"
-              value="Clinical app (HIPAA)"
-            />
-            <View style={styles.divider} />
-            <InfoRow
-              icon="cloud-done-outline"
-              label="Sync"
-              value="Backed up according to hospital policy"
-            />
-          </Card>
+          {!isDoctor ? (
+            <>
+              <PatientIntakePrivacyBanner />
+
+              <Card variant="outline" style={styles.infoCard}>
+                <InfoRow
+                  icon="business-outline"
+                  label="Burn center"
+                  value={hospitalLabel}
+                />
+                <View style={styles.divider} />
+                <InfoRow
+                  icon="mail-outline"
+                  label="Sign-in email"
+                  value={jwtEmail ?? "Not available on this device"}
+                />
+                <View style={styles.divider} />
+                <InfoRow
+                  icon="shield-checkmark-outline"
+                  label="Access"
+                  value="HIPAA-protected patient app"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/settings" as Href)}
+                  style={({ pressed }) => [
+                    styles.settingsLink,
+                    pressed && styles.settingsLinkPressed,
+                  ]}
+                >
+                  <Ionicons color={colors.primary} name="settings-outline" size={18} />
+                  <Text style={[styles.settingsLinkText, typography.bodyStrong]}>
+                    Edit name or hospital in Settings
+                  </Text>
+                  <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
+                </Pressable>
+              </Card>
+
+              <Text style={[styles.sectionHeading, typography.micro]}>
+                Onboarding record
+              </Text>
+
+              <PatientIntakeRecord
+                error={intakeError}
+                loading={intakeLoading && !refreshing}
+                onboardingCompleted={me?.onboarding_completed === true}
+                sections={profileSections}
+                submittedAt={intake?.submittedAt ?? null}
+              />
+            </>
+          ) : (
+            <Card variant="outline" style={styles.infoCard}>
+              <InfoRow
+                icon="business-outline"
+                label="Hospital"
+                value={hospitalLabel}
+              />
+              <View style={styles.divider} />
+              <InfoRow
+                icon="lock-closed-outline"
+                label="Access"
+                value="Clinical app (HIPAA)"
+              />
+              <View style={styles.divider} />
+              <InfoRow
+                icon="cloud-done-outline"
+                label="Sync"
+                value="Backed up according to hospital policy"
+              />
+            </Card>
+          )}
 
           <Card variant="muted" style={styles.sessionCard}>
             <View style={styles.sessionRow}>
               <Ionicons name="shield-half-outline" size={22} color={colors.primary} />
               <Text style={[styles.sessionCopy, typography.caption]}>
-                Sign out clears this device until you enter your password again.
+                Sign out clears this device until you enter your password again. Do not share
+                screenshots of your health information.
               </Text>
             </View>
             <Button title="Sign out" variant="destructiveOutline" onPress={signOut} />
@@ -161,7 +290,11 @@ export default function ProfileScreen() {
 
           <TrustFooter
             dense
-            message="Downloading or emailing patient charts from BurnX follows your hospital's rules. Ask your privacy officer when unsure."
+            message={
+              isDoctor
+                ? "Downloading or emailing patient charts from NeoTherm follows your hospital's rules. Ask your privacy officer when unsure."
+                : "Your onboarding answers are shared only with your selected burn center under HIPAA. Contact your care team to correct clinical details."
+            }
           />
         </>
       )}
@@ -279,6 +412,30 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.divider,
     marginLeft: 28,
+  },
+  settingsLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  settingsLinkPressed: {
+    opacity: 0.88,
+  },
+  settingsLinkText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 15,
+  },
+  sectionHeading: {
+    color: colors.textMuted,
+    letterSpacing: 0.55,
+    textTransform: "uppercase",
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   sessionCard: {
     gap: spacing.lg,

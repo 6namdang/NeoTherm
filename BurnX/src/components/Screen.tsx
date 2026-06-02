@@ -15,7 +15,7 @@ import {
 import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
 
-export type ScreenPreset = "stack" | "tabs";
+export type ScreenPreset = "stack" | "tabs" | "materialTabs";
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
@@ -25,6 +25,8 @@ type ScreenProps = PropsWithChildren<{
   animateEntry?: boolean;
   /** Pass `<RefreshControl />` so screens can re-fetch remote source-of-truth data (e.g. Assignments). */
   refreshControl?: ScrollViewProps["refreshControl"];
+  onScroll?: ScrollViewProps["onScroll"];
+  scrollEventThrottle?: number;
 }>;
 
 function FadeMount({ children }: PropsWithChildren) {
@@ -45,13 +47,20 @@ export function Screen({
   keyboardAvoid,
   animateEntry,
   refreshControl,
+  onScroll,
+  scrollEventThrottle = 16,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
   const bottomPad =
-    preset === "tabs"
+    preset === "tabs" || preset === "materialTabs"
       ? spacing.xxl + spacing.md + 12
       : Math.max(insets.bottom, spacing.lg) + spacing.xxl;
+
+  const safeAreaEdges =
+    preset === "materialTabs"
+      ? (["left", "right"] as const)
+      : (["top", "left", "right"] as const);
 
   const horizontalPad = spacing.xl;
   const topPad = spacing.xl;
@@ -83,7 +92,9 @@ export function Screen({
   const shell = scroll ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      onScroll={onScroll}
       refreshControl={refreshControl}
+      scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={scrollContentContainer}
     >
@@ -107,7 +118,7 @@ export function Screen({
     );
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.screen} edges={safeAreaEdges}>
       <View style={styles.canvas} pointerEvents="none">
         <View style={styles.washTop} />
         <View style={styles.washBottom} />

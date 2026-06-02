@@ -25,33 +25,35 @@ function localUtcIsoForYmdClock(ymd: string, hour: number, minute: number): stri
   return new Date(y, (m ?? 1) - 1, da ?? 1, hour, minute, 0, 0).toISOString();
 }
 
+function slot(
+  dateYmd: string,
+  slot_id: string,
+  form_ids: string[],
+  openHour: number,
+  openMinute: number,
+): FormScheduleSlot {
+  return {
+    slot_id,
+    form_ids,
+    local_open_time: `${pad2(openHour)}:${pad2(openMinute)}`,
+    local_close_time: "23:59",
+    n1_utc: localUtcIsoForYmdClock(dateYmd, openHour, openMinute),
+  };
+}
+
 /**
- * When GET /form-schedule fails, approximate grouped slots (mirrors backend intent:
- * morning sleep, evening pain+mood).
+ * When GET /form-schedule fails, approximate per-form EMA slots (mirrors backend intent):
+ * sleep 9am; pain 11am + 8pm; mood 12pm + 10pm — all close 23:59 local.
  */
 export function buildFallbackFormSchedule(dateYmd: string): FormScheduleResponse {
-  const morning: FormScheduleSlot = {
-    slot_id: "morning_slot",
-    form_ids: ["ema_sleep_quality_v1"],
-    local_open_time: "06:30",
-    local_close_time: "12:00",
-    n1_utc: localUtcIsoForYmdClock(dateYmd, 7, 30),
-    n2_utc: localUtcIsoForYmdClock(dateYmd, 9, 0),
-    n3_utc: localUtcIsoForYmdClock(dateYmd, 10, 30),
-  };
-  const evening: FormScheduleSlot = {
-    slot_id: "evening_slot",
-    form_ids: ["ema_pain_now_v1", "ema_mood_v1"],
-    local_open_time: "17:00",
-    local_close_time: "22:30",
-    n1_utc: localUtcIsoForYmdClock(dateYmd, 18, 0),
-    n2_utc: localUtcIsoForYmdClock(dateYmd, 19, 30),
-    n3_utc: localUtcIsoForYmdClock(dateYmd, 21, 0),
-  };
-
   return {
     date: dateYmd,
-    slots: [morning, evening],
-    n4_audit_utc: localUtcIsoForYmdClock(dateYmd, 21, 45),
+    slots: [
+      slot(dateYmd, "sleep_am", ["ema_sleep_quality_v1"], 9, 0),
+      slot(dateYmd, "pain_am", ["ema_pain_now_v1"], 11, 0),
+      slot(dateYmd, "pain_pm", ["ema_pain_now_v1"], 20, 0),
+      slot(dateYmd, "mood_noon", ["ema_mood_v1"], 12, 0),
+      slot(dateYmd, "mood_night", ["ema_mood_v1"], 22, 0),
+    ],
   };
 }

@@ -6,19 +6,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useRef, useState } from "react";
 import {
   Animated,
-  PixelRatio,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import Svg, {
-  Defs,
-  LinearGradient as SvgLinearGradient,
-  Rect,
-  Stop,
-} from "react-native-svg";
 import type {
   PainIntensityDashboardPoint,
   PainIntensityDashboardSnapshot,
@@ -26,23 +19,16 @@ import type {
 } from "../../lib/pain-intensity-scoring";
 import { PainIntensityEducationModal } from "./PainIntensityEducationModal";
 import { PainIntensityHistoryModal } from "./PainIntensityHistoryModal";
+import { AnimatedScaleTrack } from "./ui/AnimatedScaleTrack";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 
 const SCALE_MIN = 30;
 const SCALE_MAX = 85;
-const SCALE_SPAN = SCALE_MAX - SCALE_MIN;
 const TICK_VALUES = [55, 60, 70];
 
 /** Bar fill: low T (left) → high T (right), same continuum as fatigue home scale. */
-const GRAD_COLORS = {
-  low: "#22C55E",
-  mid: "#F59E0B",
-  high: "#DC2626",
-} as const;
-
 const BAR_H = 6;
-const BAR_R = BAR_H / 2;
 
 const HEALTH_ACCENT = colors.systemRed;
 
@@ -79,12 +65,6 @@ function formatSubmitted(iso: string | null): string | null {
   }).format(d);
 }
 
-function pctFromTScore(t: number): number {
-  const c = Math.min(SCALE_MAX, Math.max(SCALE_MIN, t));
-  return ((c - SCALE_MIN) / SCALE_SPAN) * 100;
-}
-
-/** Approximate half-width of 95% CI on the T-metric (normal approx: 1.96 × SE). */
 function ci95HalfWidth(se: number): number {
   return Math.round(se * 1.96 * 10) / 10;
 }
@@ -94,16 +74,14 @@ type Props = {
   history: PainIntensityDashboardPoint[];
 };
 
-export function PainIntensityScoreCard({ snapshot, history }: Props) {
+export function PainIntensityScoreCard({
+  snapshot,
+  history,
+}: Props) {
   const [educationOpen, setEducationOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [trackBarWidth, setTrackBarWidth] = useState(0);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
-  const gradientId = useMemo(
-    () => `painIntensityTScale_${Math.random().toString(36).slice(2, 11)}`,
-    [],
-  );
 
   const submittedLine = useMemo(
     () => formatSubmitted(snapshot?.createdAtIso ?? null),
@@ -114,6 +92,9 @@ export function PainIntensityScoreCard({ snapshot, history }: Props) {
   const tScore = snapshot?.tScore ?? null;
   const severity = snapshot?.severity ?? null;
   const se = snapshot?.standardError ?? null;
+  const animateKey = snapshot?.createdAtIso ?? "pain-empty";
+
+  const latestOrdinal = history[0] ?? null;
 
   const runPressIn = () => {
     Animated.parallel([
@@ -148,47 +129,6 @@ export function PainIntensityScoreCard({ snapshot, history }: Props) {
       }),
     ]).start();
   };
-
-  const fillPct = tScore !== null ? pctFromTScore(tScore) : 0;
-  const latestOrdinal = history[0] ?? null;
-
-  const gradientBar = (
-    <View
-      style={styles.trackGradientWrap}
-      onLayout={(e) => {
-        const w = PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width);
-        if (w > 0) setTrackBarWidth((prev) => (prev !== w ? w : prev));
-      }}
-    >
-      {trackBarWidth > 0 ? (
-        <Svg height={BAR_H} width={trackBarWidth}>
-          <Defs>
-            <SvgLinearGradient
-              gradientUnits="userSpaceOnUse"
-              id={gradientId}
-              x1={0}
-              x2={trackBarWidth}
-              y1={0}
-              y2={0}
-            >
-              <Stop offset="0" stopColor={GRAD_COLORS.low} />
-              <Stop offset="0.5" stopColor={GRAD_COLORS.mid} />
-              <Stop offset="1" stopColor={GRAD_COLORS.high} />
-            </SvgLinearGradient>
-          </Defs>
-          <Rect
-            fill={`url(#${gradientId})`}
-            height={BAR_H}
-            rx={BAR_R}
-            ry={BAR_R}
-            width={trackBarWidth}
-          />
-        </Svg>
-      ) : (
-        <View style={styles.trackFillPlaceholder} />
-      )}
-    </View>
-  );
 
   return (
     <Animated.View
@@ -239,7 +179,9 @@ export function PainIntensityScoreCard({ snapshot, history }: Props) {
         )}
       </Pressable>
 
-      <Text style={styles.chromeHint}>Tap header for PROMIS Pain Intensity details. Tap scores below for average pain history.</Text>
+      <Text style={styles.chromeHint}>
+        Tap header for PROMIS Pain Intensity details. Tap scores for average pain history.
+      </Text>
 
       <Pressable
         accessibilityHint="Opens a chart of average pain intensity over time"
@@ -289,28 +231,29 @@ export function PainIntensityScoreCard({ snapshot, history }: Props) {
             ) : null}
 
             <View style={styles.trackSection}>
-              <View style={styles.trackShell}>
-                {gradientBar}
-                {TICK_VALUES.map((tick) => (
+              <AnimatedScaleTrack
+                animateKey={animateKey}
+                barHeight={BAR_H}
+                compact
+                dotColor={HEALTH_ACCENT}
+                renderTick={(tick, leftPx, pct) => (
                   <View
                     key={tick}
                     pointerEvents="none"
                     style={[
                       styles.tickBar,
-                      { left: `${pctFromTScore(tick)}%` as `${number}%` },
+                      leftPx !== null
+                        ? { left: leftPx, marginLeft: -1 }
+                        : { left: `${pct * 100}%` as `${number}%`, marginLeft: -1 },
                     ]}
                   />
-                ))}
-                {tScore !== null ? (
-                  <View
-                    pointerEvents="none"
-                    style={[
-                      styles.patientDot,
-                      { left: `${fillPct}%` as `${number}%` },
-                    ]}
-                  />
-                ) : null}
-              </View>
+                )}
+                scaleMax={SCALE_MAX}
+                scaleMin={SCALE_MIN}
+                showScaleLabels={false}
+                tScore={tScore}
+                tickValues={TICK_VALUES}
+              />
               <View style={styles.trackAxis}>
                 <Text style={styles.axisEnd}>{SCALE_MIN}</Text>
                 <Text style={styles.axisEnd}>{SCALE_MAX}</Text>
@@ -463,27 +406,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 8,
   },
-  trackShell: {
-    position: "relative",
-    height: 20,
-    justifyContent: "center",
-  },
-  trackGradientWrap: {
+  tickBar: {
     position: "absolute",
-    left: 0,
-    right: 0,
     top: "50%",
-    marginTop: BAR_H / -2,
-    height: BAR_H,
-    borderRadius: BAR_R,
-    overflow: "hidden",
-    backgroundColor: colors.systemGray6,
-  },
-  trackFillPlaceholder: {
-    flex: 1,
-    height: BAR_H,
-    borderRadius: BAR_R,
-    backgroundColor: colors.systemGray6,
+    marginTop: -7,
+    width: 2,
+    height: 14,
+    backgroundColor: colors.systemGray3,
+    borderRadius: 1,
   },
   gradientLegend: {
     fontFamily: fontSans,
@@ -492,29 +422,6 @@ const styles = StyleSheet.create({
     color: colors.systemGray,
     lineHeight: 15,
     marginTop: 4,
-  },
-  tickBar: {
-    position: "absolute",
-    top: "50%",
-    marginTop: -7,
-    marginLeft: -1,
-    width: 2,
-    height: 14,
-    backgroundColor: colors.systemGray3,
-    borderRadius: 1,
-  },
-  patientDot: {
-    position: "absolute",
-    top: "50%",
-    marginTop: -6,
-    marginLeft: -6,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: HEALTH_ACCENT,
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-    zIndex: 2,
   },
   trackAxis: {
     flexDirection: "row",

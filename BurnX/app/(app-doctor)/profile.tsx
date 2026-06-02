@@ -91,7 +91,7 @@ export default function DoctorProfileScreen() {
       <StatusBar style="dark" />
       <PageHeader
         eyebrow="Your account"
-        subtitle="Affiliation and sign-in attributes as stored by your BurnX administrator."
+        subtitle="Affiliation and sign-in attributes as stored by your NeoTherm administrator."
         title="Personal"
       />
 
@@ -155,7 +155,7 @@ export default function DoctorProfileScreen() {
 
           <TrustFooter
             dense
-            message="Access to patient lists follows your hospital's policies. Use BurnX only on approved devices."
+            message="Access to patient lists follows your hospital's policies. Use NeoTherm only on approved devices."
           />
         </>
       )}

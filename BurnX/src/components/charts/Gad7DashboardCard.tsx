@@ -3,19 +3,14 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo } from "react";
-import {
-  AccessibilityInfo,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gad7EducationModal } from "./Gad7EducationModal";
 import { IosSemiGauge } from "./IosSemiGauge";
 import {
   GAD7_TOTAL_MAX,
   gad7SeverityFromTotal,
+  type Gad7DashboardPoint,
   type Gad7DashboardSnapshot,
   type Gad7Severity,
 } from "../../lib/gad7-scoring";
@@ -32,7 +27,7 @@ const SEVERITY_LABEL: Record<Gad7Severity, string> = {
   minimal: "Minimal anxiety symptom burden",
   mild: "Mild symptom burden common in primary care populations",
   moderate: "Moderate — consider informing your care team if new or worsening",
-  severe: "Marked burden — orientation only; not a diagnosis by itself",
+  severe: "Marked burden — consider informing your care team if new or worsening",
 };
 
 const SEVERITY_ACCENT: Record<Gad7Severity, { main: string; soft: string }> = {
@@ -64,9 +59,13 @@ function formatSubmitted(iso: string | null): string | null {
   }).format(d);
 }
 
-type Props = { snapshot: Gad7DashboardSnapshot | null };
+type Props = {
+  snapshot: Gad7DashboardSnapshot | null;
+  history?: Gad7DashboardPoint[];
+};
 
-export function Gad7DashboardCard({ snapshot }: Props) {
+export function Gad7DashboardCard({ snapshot, history = [] }: Props) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const submittedLine = useMemo(
     () => formatSubmitted(snapshot?.createdAtIso ?? null),
     [snapshot?.createdAtIso],
@@ -78,21 +77,16 @@ export function Gad7DashboardCard({ snapshot }: Props) {
     complete && total !== null ? gad7SeverityFromTotal(total) : null;
   const palette =
     severity !== null ? SEVERITY_ACCENT[severity] : SEVERITY_ACCENT.minimal;
-
-  function announceInterpretation(): void {
-    const s = severity ?? ("minimal" as Gad7Severity);
-    const phrase = `${SEVERITY_LABEL[s]} Total score ${total !== null ? String(total) : "not computed"} of ${GAD7_TOTAL_MAX}.`;
-    void AccessibilityInfo.announceForAccessibility(phrase);
-  }
+  const animateKey = snapshot?.createdAtIso ?? "gad7-empty";
 
   return (
     <View accessibilityRole="summary" style={styles.card}>
       <Pressable
-        accessibilityHint="Reads a plain-language interpretation hint for your latest GAD-7 total"
-        accessibilityLabel="GAD-7 anxiety card header"
+        accessibilityHint="Opens GAD-7 history, cut-points, and score details"
+        accessibilityLabel="GAD-7 anxiety card header. Open details"
         accessibilityRole="button"
         android_ripple={{ color: "rgba(15,23,42,0.06)", foreground: false }}
-        onPress={announceInterpretation}
+        onPress={() => setDetailOpen(true)}
         style={({ pressed }) => [
           styles.chromePressable,
           pressed && Platform.OS === "ios" && { opacity: 0.92 },
@@ -108,6 +102,13 @@ export function Gad7DashboardCard({ snapshot }: Props) {
               />
               <Text style={[typography.title, styles.headerTitle]}>GAD-7 anxiety</Text>
             </View>
+            <Ionicons
+              accessibilityElementsHidden
+              color={CARD.muted}
+              importantForAccessibility="no"
+              name="information-circle-outline"
+              size={20}
+            />
           </View>
           <Text style={[styles.captionMetaBelow, typography.micro]}>
             Weekly screen · Sum 0–{String(GAD7_TOTAL_MAX)}
@@ -126,30 +127,49 @@ export function Gad7DashboardCard({ snapshot }: Props) {
         )}
       </Pressable>
 
-      <View style={styles.gaugeWrap}>
-        <IosSemiGauge
-          accentColor={palette.main}
-          accentSoft={palette.soft}
-          maxValue={GAD7_TOTAL_MAX}
-          tickTotals={[5, 10, 15]}
-          value={total}
-        />
-        <View style={styles.gaugeMetricBlock}>
-          <Text accessibilityRole="text" style={styles.scoreHuge}>
-            {total !== null ? String(total) : "–"}
-          </Text>
-          <Text style={[styles.bandTag, typography.caption]}>
-            {complete && severity !== null
-              ? SEVERITY_LABEL[severity]
-              : "Complete all seven items for a summed score"}
-          </Text>
+      <Text style={[styles.chartHint, typography.caption]}>
+        Tap the header or score for GAD-7 history, cut-points, and how NeoTherm summarizes your results.
+      </Text>
+
+      <Pressable
+        accessibilityHint="Opens GAD-7 history and score details"
+        accessibilityLabel="GAD-7 gauge. Open details"
+        accessibilityRole="button"
+        onPress={() => setDetailOpen(true)}
+        style={({ pressed }) => [styles.gaugePressable, pressed && { opacity: 0.94 }]}
+      >
+        <View style={styles.gaugeWrap}>
+          <IosSemiGauge
+            accentColor={palette.main}
+            animateKey={animateKey}
+            maxValue={GAD7_TOTAL_MAX}
+            tickTotals={[5, 10, 15]}
+            value={total}
+          />
+          <View style={styles.gaugeMetricBlock}>
+            <Text accessibilityRole="text" style={styles.scoreHuge}>
+              {total !== null ? String(total) : "–"}
+            </Text>
+            <Text style={[styles.bandTag, typography.caption]}>
+              {complete && severity !== null
+                ? SEVERITY_LABEL[severity]
+                : "Complete all seven items for a summed score"}
+            </Text>
+          </View>
         </View>
-      </View>
+      </Pressable>
 
       <Text style={[styles.footerNote, typography.caption]}>
         Standard cut-points for research and primary care clinics: totals 5, 10, and 15 act as checkpoints along the
         arc. This visualization is informational, not a substitute for clinician judgment.
       </Text>
+
+      <Gad7EducationModal
+        history={history}
+        onClose={() => setDetailOpen(false)}
+        snapshot={snapshot}
+        visible={detailOpen}
+      />
     </View>
   );
 }
@@ -220,6 +240,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 20,
   },
+  chartHint: {
+    color: colors.textMuted,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
   submittedStamp: {
     color: CARD.fg,
     fontFamily: typography.micro.fontFamily,
@@ -235,6 +260,9 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 2,
     marginBottom: 2,
+  },
+  gaugePressable: {
+    width: "100%",
   },
   gaugeWrap: {
     alignItems: "center",

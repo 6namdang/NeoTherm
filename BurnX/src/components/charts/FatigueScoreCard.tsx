@@ -6,24 +6,28 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import {
-  PixelRatio,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    PixelRatio,
+    Pressable,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import Svg, {
-  Defs,
-  LinearGradient as SvgLinearGradient,
-  Rect,
-  Stop,
+    Defs,
+    Rect,
+    Stop,
+    LinearGradient as SvgLinearGradient,
 } from "react-native-svg";
-import { FatigueEducationModal } from "./FatigueEducationModal";
-import type { FatigueDashboardSnapshot, FatigueSeverity } from "../../lib/fatigue-scoring";
+import type {
+  FatigueDashboardPoint,
+  FatigueDashboardSnapshot,
+  FatigueSeverity,
+} from "../../lib/fatigue-scoring";
 import { colors } from "../../theme/colors";
 import { radius, spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
+import { FatigueEducationModal } from "./FatigueEducationModal";
 
 const CARD = {
   fg: "#0F172A",
@@ -79,11 +83,12 @@ function pctFromTScore(t: number): number {
 
 type Props = {
   snapshot: FatigueDashboardSnapshot | null;
+  history?: FatigueDashboardPoint[];
 };
 
 const TICK_LABEL_OFFSET_X = 14;
 
-export function FatigueScoreCard({ snapshot }: Props) {
+export function FatigueScoreCard({ snapshot, history = [] }: Props) {
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const [educationOpen, setEducationOpen] = useState(false);
   const [trackBarWidth, setTrackBarWidth] = useState(0);
@@ -166,7 +171,7 @@ export function FatigueScoreCard({ snapshot }: Props) {
       </Pressable>
 
       <Text style={[styles.chartHint, typography.caption]}>
-        Tap the header for PROMIS fatigue details and how BurnX computes your snapshot.
+        Tap the header for PROMIS fatigue details and how NeoTherm computes your snapshot.
       </Text>
 
       {!snapshot ? (
@@ -329,12 +334,12 @@ export function FatigueScoreCard({ snapshot }: Props) {
           </View>
 
           <Text style={[styles.footerCaption, typography.caption]}>
-            Higher score = more fatigue. PROMIS population mean is 50 (SD ≈ 10); this chart is orientation only, not a
-            diagnosis.
+            Higher score = more fatigue. PROMIS population mean is 50 (SD ≈ 10).
           </Text>
         </>
       )}
       <FatigueEducationModal
+        history={history}
         onClose={() => setEducationOpen(false)}
         snapshot={snapshot}
         visible={educationOpen}

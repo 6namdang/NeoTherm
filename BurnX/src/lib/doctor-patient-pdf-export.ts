@@ -107,7 +107,7 @@ export function buildPatientQuestionnaireExportHtml(params: {
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>${escapeHtml(`BurnX export · ${patientName}`)}</title>
+  <title>${escapeHtml(`NeoTherm export · ${patientName}`)}</title>
   <style>
     :root {
       --text: #0f172a;
@@ -212,7 +212,7 @@ export function buildPatientQuestionnaireExportHtml(params: {
 </head>
 <body>
   <header class="cover">
-    <h1>BurnX questionnaire export</h1>
+    <h1>NeoTherm questionnaire export</h1>
     <p class="subtitle">Full dump of loaded responses · Verify against source documentation before clinical use.</p>
     <dl class="meta">
       <dt>Patient name</dt><dd>${escapeHtml(patientName)}</dd>
@@ -226,7 +226,7 @@ export function buildPatientQuestionnaireExportHtml(params: {
   ${submissionBlocks}
   <footer class="disclaimer">
     Confidential · Contains PHI-class questionnaire content · Distribution subject to hospital policy and applicable regulations (e.g. HIPAA).
-    This file reflects only submissions present in BurnX at export time (history may be capped by sync limits).
+    This file reflects only submissions present in NeoTherm at export time (history may be capped by sync limits).
   </footer>
 </body>
 </html>`;

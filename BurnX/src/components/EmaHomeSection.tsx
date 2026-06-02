@@ -26,7 +26,7 @@ export function EmaHomeSection({ rows }: Props) {
     <View style={styles.wrap} accessibilityRole="none">
       <Text style={[styles.kicker, typography.eyebrow]}>Daily check-ins</Text>
       <Text style={[styles.lede, typography.body]}>
-        {"Short questionnaires open during today's morning and evening windows."}
+        {"Short questionnaires open at scheduled times throughout the day."}
       </Text>
       <View style={styles.list}>
         {rows.map((row) => (

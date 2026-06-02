@@ -12,7 +12,7 @@ type AssistiveClinicalNoticeProps = {
 /** Brief note that reminders and prompts do not replace a clinician */
 export function AssistiveClinicalNotice({
   confidenceLabel = "Your clinical team decides care",
-  helperText = "BurnX only shows reminders your hospital turns on - it never replaces doctors or nurses.",
+  helperText = "NeoTherm only shows reminders your hospital turns on - it never replaces doctors or nurses.",
 }: AssistiveClinicalNoticeProps) {
   return (
     <View style={styles.shell}>

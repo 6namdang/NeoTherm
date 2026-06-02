@@ -1,6 +1,6 @@
 /**
  * Cognitive symptom screen — four PROM-style frequency items × 0–4 (never → very often).
- * Total burden 0–16; higher implies more cognitive symptom burden in this window (orientation only).
+ * Total burden 0–16; higher implies more cognitive symptom burden in this window.
  */
 
 import type { ScaleAnswers } from "../constants/forms/types";
@@ -58,3 +58,5 @@ export function scoreCognitiveFunction(
 export type CognitiveDashboardSnapshot = {
   createdAtIso: string;
 } & CognitiveScoreResult;
+
+export type CognitiveDashboardPoint = CognitiveDashboardSnapshot;

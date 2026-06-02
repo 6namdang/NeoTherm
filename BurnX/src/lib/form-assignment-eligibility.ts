@@ -3,10 +3,15 @@ import { isEmaFormId } from "../constants/ema-forms";
 import type { AssignmentDailyLocalStart } from "../constants/forms/types";
 import { resolveEmaAssignmentSnapshot } from "./ema-assignment-eligibility";
 import { getBurnInjuryDate, getLastCompletion } from "./burn-date";
+import { isLongAssessmentMemberFormId } from "./care-program-form-groups";
 import {
     setAssignmentLastCompletedIso,
 } from "./form-assignment-cache-storage";
 import { getSubjectFromStoredIdToken } from "./jwt";
+import {
+  getCurrentFullDayWindow,
+  submissionInWindow,
+} from "./weekly-full-day-assignment";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -89,14 +94,23 @@ async function persistLastCompletedCache(
   await setAssignmentLastCompletedIso(sub, formId, serverLast);
 }
 
+function hasWeeklyFullDays(
+  days: readonly number[] | undefined,
+): days is readonly number[] {
+  return Array.isArray(days) && days.length > 0;
+}
+
 /**
  * Call immediately after **`POST /form-responses`** succeeds for a recurring assignment so Assignments
- * updates without waiting for another GET round-trip (cadence or daily-local window).
+ * updates without waiting for another GET round-trip (cadence, daily-local, or weekly full-day window).
  */
 export async function persistAssignmentSubmissionClientTime(
   formId: string,
 ): Promise<void> {
   const form = getFormById(formId);
+  const weeklyFullDays = form?.assignmentWeeklyFullDays;
+  const hasWeeklyFull =
+    hasWeeklyFullDays(weeklyFullDays) && weeklyFullDays.length > 0;
   const cadenceDays = form?.assignmentCadenceDays;
   const daily =
     form?.assignmentDailyLocalStart &&
@@ -104,8 +118,8 @@ export async function persistAssignmentSubmissionClientTime(
       ? form.assignmentDailyLocalStart
       : undefined;
   const hasCadence =
-    cadenceDays !== undefined && cadenceDays > 0 && !daily;
-  if (!hasCadence && !daily) return;
+    cadenceDays !== undefined && cadenceDays > 0 && !daily && !hasWeeklyFull;
+  if (!hasCadence && !daily && !hasWeeklyFull) return;
   const sub = await getSubjectFromStoredIdToken();
   if (!sub) return;
   await setAssignmentLastCompletedIso(
@@ -142,7 +156,16 @@ export async function resolveAssignmentSnapshot(
   }
 
   try {
+    if (isLongAssessmentMemberFormId(formId)) {
+      return {
+        pending: false,
+        lastCompletedAt: await getLastCompletion(formId),
+        injuryDate: await getBurnInjuryDate(),
+      };
+    }
+
     const form = getFormById(formId);
+    const weeklyFullDays = form?.assignmentWeeklyFullDays;
     const dailyStart = form?.assignmentDailyLocalStart;
     const cadenceDays = form?.assignmentCadenceDays;
     const daily =
@@ -157,6 +180,28 @@ export async function resolveAssignmentSnapshot(
     ]);
 
     const nowMs = Date.now();
+
+    if (hasWeeklyFullDays(weeklyFullDays)) {
+      await persistLastCompletedCache(formId, serverLast);
+      const window = getCurrentFullDayWindow(nowMs, weeklyFullDays);
+      if (window) {
+        const recorded = submissionInWindow(
+          serverLast,
+          window.startMs,
+          window.endMs,
+        );
+        return {
+          pending: !recorded,
+          lastCompletedAt: serverLast,
+          injuryDate,
+        };
+      }
+      return {
+        pending: false,
+        lastCompletedAt: serverLast,
+        injuryDate,
+      };
+    }
 
     if (daily) {
       await persistLastCompletedCache(formId, serverLast);

@@ -1,5 +1,6 @@
 import { COGNITO } from "../../aws-config";
 import { bxLog } from "./debug-log";
+import { clearEmaTodayState } from "./ema-today-state";
 import { clearAssignmentCachesForSub } from "./form-assignment-cache-storage";
 import { getSubjectFromStoredIdToken } from "./jwt";
 import { deleteStorageItem, getStorageItem, setStorageItem } from "./storage";
@@ -214,8 +215,22 @@ export async function getValidIdToken() {
   return getStorageItem("idToken");
 }
 
+export async function deleteCognitoUser(): Promise<void> {
+  bxLog("auth", "deleteCognitoUser");
+  await getValidIdToken();
+  const accessToken = await getStorageItem("accessToken");
+  if (!accessToken) {
+    throw new Error("Please sign in again.");
+  }
+  await cognitoFetch("DeleteUser", {
+    AccessToken: accessToken,
+  });
+  bxLog("auth", "deleteCognitoUser ok");
+}
+
 export async function signOut() {
   bxLog("auth", "signOut");
+  clearEmaTodayState();
   const sub = await getSubjectFromStoredIdToken();
   if (sub) {
     await clearAssignmentCachesForSub(sub);

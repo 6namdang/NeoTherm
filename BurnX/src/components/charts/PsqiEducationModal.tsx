@@ -1,5 +1,5 @@
 /**
- * PSQI reference sheet. Clinical context, how BurnX scores the index, and optional “your snapshot” summary.
+ * PSQI reference sheet. Clinical context, how NeoTherm scores the index, and optional “your snapshot” summary.
  */
 
 import { Ionicons } from "@expo/vector-icons";
@@ -35,7 +35,7 @@ const DOMAIN_COPY: Record<
   durat: {
     title: "Sleep duration (DURAT)",
     body:
-      "Summarizes how much you report sleeping. In the published PSQI this comes from self-reported hours of sleep; BurnX maps your answer category to the standard 0 to 3 duration component (higher = worse).",
+      "Summarizes how much you report sleeping. In the published PSQI this comes from self-reported hours of sleep; NeoTherm maps your answer category to the standard 0 to 3 duration component (higher = worse).",
   },
   distb: {
     title: "Sleep disturbance (DISTB)",
@@ -55,7 +55,7 @@ const DOMAIN_COPY: Record<
   hse: {
     title: "Sleep efficiency (HSE)",
     body:
-      "Approximates the percentage of time in bed that you were actually asleep. BurnX estimates time in bed from your usual bed and wake time categories and compares that to your reported sleep hours, then applies the standard efficiency cutoffs (about ≥85% best, then mid ranges, then <65% worst).",
+      "Approximates the percentage of time in bed that you were actually asleep. NeoTherm estimates time in bed from your usual bed and wake time categories and compares that to your reported sleep hours, then applies the standard efficiency cutoffs (about ≥85% best, then mid ranges, then <65% worst).",
   },
   sq: {
     title: "Subjective sleep quality (SLPQUAL)",
@@ -207,12 +207,12 @@ export function PsqiEducationModal({ visible, onClose, snapshot }: Props) {
             </View>
           ))}
 
-          <Text style={[typography.micro, styles.sectionEyebrow]}>Scoring notes in BurnX</Text>
+          <Text style={[typography.micro, styles.sectionEyebrow]}>Scoring notes in NeoTherm</Text>
           <Text style={[typography.caption, styles.para]}>
             • Questions 5b through 5i contribute their frequencies to disturbance. Question 5j follows the publication update: if “other” is endorsed but no comment is stored with the response, that item counts as 0 in the disturbance sum.{"\n\n"}
             • Latency combines the “cannot sleep within 30 minutes” item with your latency category (aligned with PSQI “Q2new” bins).{"\n\n"}
             • Daytime dysfunction uses the sum of Q8 and Q9 with standard PSQI brackets.{"\n\n"}
-            • Because BurnX uses time and duration categories instead of raw clock entry, sleep efficiency uses representative midpoints from your chosen buckets: adequate for trends and self-monitoring but not identical to handwritten times.{"\n\n"}
+            • Because NeoTherm uses time and duration categories instead of raw clock entry, sleep efficiency uses representative midpoints from your chosen buckets: adequate for trends and self-monitoring but not identical to handwritten times.{"\n\n"}
             • Only items needed for publication PSQI scoring (typically questions 1 to 9) are required to compute your total here; partner-reported items are not part of the published global score.
           </Text>
 
