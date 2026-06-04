@@ -15,7 +15,9 @@ MoCA 8.1 **without** orientation, education +1, or full MIS cuing. Thirteen pagi
 - Implementation: `src/lib/moca-speech-recognition.ts` — native on iOS/Android, Web Speech API on web dev.
 - Shared helpers: `detectNamedAnimals`, `detectMemoryWords`, `normalizeSpokenDigits`.
 
-Rebuild dev client after plugin changes: `npx expo prebuild` / `expo run:ios`.
+Rebuild dev client after plugin changes: `npm run ios:device` (native module is not loaded by tunnel/Metro alone).
+
+If you see **Cannot find native module 'ExpoSpeechRecognition'**, the installed dev build is older than `expo-speech-recognition` — run `npm run ios:device` once, then reconnect via tunnel or LAN.
 
 ## Scoring (on-device, max 21)
 
@@ -36,7 +38,23 @@ Rebuild dev client after plugin changes: `npx expo prebuild` / `expo run:ios`.
 - Builder: `src/lib/build-moca-submit-payload.ts`
 - Validator: `src/lib/validate-moca-submit-payload.ts` — throws `MocaSubmitValidationError` if any required capture missing.
 
-## Long Assessment wiring
+## Standalone testing (temporary)
+
+Set **`MOCA_STANDALONE_TESTING_ENABLED = false`** in `src/constants/forms/moca.ts` to revert to Long Assessment-only MoCA.
+
+When `true` (current default for device testing):
+
+- MoCA appears on **Care Programs → Weekly** tab, always listed as pending
+- Open via **`/forms/moca`** — full 13-section runner + single AWS submit
+- Long Assessment still includes MoCA as section 7 on day 30/60
+
+When `false` (production):
+
+- MoCA removed from Weekly tab
+- `/forms/moca` redirects to Long Assessment
+- MoCA only reachable inside the day-30/60 bundle
+
+## Long Assessment wiring (production)
 
 - `app/(app)/forms/long-assessment.tsx` renders `MocaFormRunner` when `activeFormId === "moca_v1"`.
 - `getFormById("moca_v1")` returns metadata from `MOCA_FORM`.

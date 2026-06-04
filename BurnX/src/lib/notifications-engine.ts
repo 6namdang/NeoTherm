@@ -125,20 +125,6 @@ export async function cancelOpenNotificationForSlot(
   );
 }
 
-/** @deprecated Use `cancelOpenNotificationForSlot`. */
-export async function cancelStrikeTripletForSlot(
-  slotId: string,
-  dateYmd: string,
-): Promise<void> {
-  await cancelOpenNotificationForSlot(slotId, dateYmd);
-}
-
-/** @deprecated Audit reminders removed — no-op for callers. */
-export async function cancelAuditStrike(): Promise<void> {
-  if (Platform.OS === "web") return;
-  await Notifications.cancelScheduledNotificationAsync("strike-audit-today");
-}
-
 async function scheduleOpenNotification(args: {
   slot: FormScheduleSlot;
   scheduleDateYmd: string;

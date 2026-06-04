@@ -4,7 +4,7 @@ import { FATIGUE_FORM } from "./fatigue";
 import { GAD7_FORM } from "./gad7";
 import { LIBRE_FORM } from "./libre";
 import { LONG_ASSESSMENT_FORM } from "./long-assessment";
-import { MOCA_FORM } from "./moca";
+import { MOCA_FORM, isMocaStandaloneTestingEnabled } from "./moca";
 import { PAIN_INTENSITY_FORM } from "./pain-intensity";
 import { PAIN_INFERENCE_FORM } from "./pain-inference";
 import { PSQI_FORM } from "./psqi";
@@ -78,6 +78,14 @@ const longAssessmentAssignment: FormDefinition = {
   description: LONG_ASSESSMENT_FORM.description,
 };
 
+const mocaStandaloneAssignment: FormDefinition | null = isMocaStandaloneTestingEnabled()
+  ? {
+      id: MOCA_FORM.id,
+      title: MOCA_FORM.name,
+      description: MOCA_FORM.description,
+    }
+  : null;
+
 const emaAssignments: FormDefinition[] = ALL_EMA_FORMS.map((f) => ({
   id: f.id,
   title: f.name,
@@ -88,5 +96,6 @@ const emaAssignments: FormDefinition[] = ALL_EMA_FORMS.map((f) => ({
 export const forms: FormDefinition[] = [
   ...emaAssignments,
   ...scaleAssignments,
+  ...(mocaStandaloneAssignment ? [mocaStandaloneAssignment] : []),
   longAssessmentAssignment,
 ];

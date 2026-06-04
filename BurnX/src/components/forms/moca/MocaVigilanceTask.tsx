@@ -11,20 +11,16 @@ import { emptyVigilanceCapture, scoreVigilance } from "../../../lib/moca-vigilan
 import { runVigilanceScript, stopMocaSpeech } from "../../../lib/moca-speech-synthesis";
 import { colors } from "../../../theme/colors";
 import { fontFamily } from "../../../theme/fontFamily";
-import { radius, spacing } from "../../../theme/spacing";
+import { spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 import {
   MocaCompactButton,
   MocaInlineAlert,
-  MocaInlineNote,
   MocaMemoryListenRow,
   MocaSectionHeader,
   MocaSectionRoot,
-  MocaTaskFooter,
   MocaTaskFrame,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 
 type VigilancePhase = "ready" | "instructions" | "running" | "complete";
@@ -34,8 +30,6 @@ type MocaVigilanceTaskProps = {
   onCaptureChange: (capture: MocaVigilanceCapture) => void;
 };
 
-const TARGET_COUNT = MOCA_VIGILANCE_LETTERS.filter((letter) => letter === "A").length;
-
 const VIGILANCE_INSTRUCTIONS =
   "I am going to read a sequence of letters. Every time you hear the letter A, tap in the box below. If you hear a different letter, do not tap in the box.";
 
@@ -44,32 +38,12 @@ export function MocaVigilanceTask({ capture, onCaptureChange }: MocaVigilanceTas
   const [voiceCue, setVoiceCue] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tapFlash, setTapFlash] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const [progressIndex, setProgressIndex] = useState(0);
 
   const tapsRef = useRef<MocaVigilanceTap[]>([]);
   const activeLetterIndexRef = useRef<number | null>(null);
   const tapFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canTap = phase === "running";
-  const canStartOver = phase !== "ready" && phase !== "instructions" && phase !== "running";
-
-  const resetTask = useCallback(() => {
-    stopMocaSpeech();
-    if (tapFlashTimerRef.current) {
-      clearTimeout(tapFlashTimerRef.current);
-      tapFlashTimerRef.current = null;
-    }
-    tapsRef.current = [];
-    activeLetterIndexRef.current = null;
-    setPhase("ready");
-    setVoiceCue("");
-    setErrorMessage(null);
-    setTapFlash(false);
-    setShowDetails(false);
-    setProgressIndex(0);
-    onCaptureChange(emptyVigilanceCapture());
-  }, [onCaptureChange]);
 
   const flashTap = useCallback(() => {
     setTapFlash(true);
@@ -97,7 +71,7 @@ export function MocaVigilanceTask({ capture, onCaptureChange }: MocaVigilanceTas
     setErrorMessage(null);
     tapsRef.current = [];
     activeLetterIndexRef.current = null;
-    setProgressIndex(0);
+    setVoiceCue("");
     setPhase("instructions");
     onCaptureChange(emptyVigilanceCapture());
 
@@ -105,8 +79,8 @@ export function MocaVigilanceTask({ capture, onCaptureChange }: MocaVigilanceTas
       onCue: setVoiceCue,
       onLetterStart: (index) => {
         activeLetterIndexRef.current = index;
-        setProgressIndex(index + 1);
         setPhase("running");
+        setVoiceCue("");
       },
       onLetterEnd: () => {
         activeLetterIndexRef.current = null;
@@ -121,35 +95,22 @@ export function MocaVigilanceTask({ capture, onCaptureChange }: MocaVigilanceTas
       onError: (message) => {
         setErrorMessage(message);
         setPhase("ready");
+        setVoiceCue("");
       },
     });
   }, [onCaptureChange]);
-
-  const omissionCount =
-    capture.letterResults.filter((result) => result.error === "omission").length;
-  const commissionCount =
-    capture.letterResults.filter((result) => result.error === "commission").length;
 
   return (
     <MocaSectionRoot>
       <MocaSectionHeader title="ATTENTION" />
 
-      <MocaTaskPrompt>{VIGILANCE_INSTRUCTIONS}</MocaTaskPrompt>
+      {phase === "ready" ? (
+        <MocaTaskPrompt>{VIGILANCE_INSTRUCTIONS}</MocaTaskPrompt>
+      ) : null}
 
       {phase === "instructions" ? (
         <View style={styles.statusBlock}>
           <MocaMemoryListenRow cue={voiceCue || "Instructions are being read aloud."} />
-        </View>
-      ) : null}
-
-      {phase === "running" ? (
-        <View style={styles.statusBlock}>
-          <Text style={[typography.caption, styles.progressLabel]}>
-            Letter {progressIndex} of {MOCA_VIGILANCE_LETTERS.length}
-          </Text>
-          {voiceCue ? (
-            <Text style={[typography.caption, styles.statusHint]}>{voiceCue}</Text>
-          ) : null}
         </View>
       ) : null}
 
@@ -184,55 +145,7 @@ export function MocaVigilanceTask({ capture, onCaptureChange }: MocaVigilanceTas
         </View>
       ) : null}
 
-      {phase === "complete" && capture.completedAt !== null ? (
-        <View style={styles.summaryStack}>
-          <MocaVoiceStatus
-            body={`${capture.errorCount} error${capture.errorCount === 1 ? "" : "s"} (${omissionCount} missed A, ${commissionCount} wrong tap)`}
-            footer={`MoCA score: ${capture.score} / 1 point (${TARGET_COUNT} letter A targets)`}
-            label="Result"
-          />
-          <MocaInlineNote>
-            {capture.score === 1
-              ? "Zero or one error — full vigilance point."
-              : "Two or more errors — no vigilance point."}
-          </MocaInlineNote>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setShowDetails((prev) => !prev)}
-            style={styles.detailsToggle}
-          >
-            <Text style={[typography.caption, styles.detailsToggleText]}>
-              {showDetails ? "Hide letter breakdown" : "Show letter breakdown"}
-            </Text>
-          </Pressable>
-          {showDetails ? (
-            <View style={styles.detailsList}>
-              {capture.letterResults.map((result) => (
-                <Text key={result.index} style={[typography.caption, styles.detailRow]}>
-                  #{result.index + 1} {result.letter}
-                  {result.isTarget ? " (A)" : ""}
-                  {" — "}
-                  {result.error === "none"
-                    ? result.isTarget
-                      ? "tapped"
-                      : "no tap"
-                    : result.error === "omission"
-                      ? "missed"
-                      : "wrong tap"}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
       {errorMessage ? <MocaInlineAlert message={errorMessage} /> : null}
-
-      {canStartOver ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
-      ) : null}
     </MocaSectionRoot>
   );
 }
@@ -241,15 +154,6 @@ const styles = StyleSheet.create({
   statusBlock: {
     gap: spacing.xs,
     width: "100%",
-  },
-  progressLabel: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    textAlign: "center",
-  },
-  statusHint: {
-    color: colors.textMuted,
-    textAlign: "center",
   },
   actionBar: {
     alignItems: "center",
@@ -280,28 +184,5 @@ const styles = StyleSheet.create({
   tapLabelActive: {
     color: colors.primary,
     fontSize: 18,
-  },
-  summaryStack: {
-    gap: spacing.sm,
-    width: "100%",
-  },
-  detailsToggle: {
-    alignSelf: "center",
-    paddingVertical: spacing.xs,
-  },
-  detailsToggleText: {
-    color: colors.primary,
-    fontFamily: fontFamily.semiBold,
-  },
-  detailsList: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.sm,
-    gap: spacing.xs,
-    padding: spacing.md,
-  },
-  detailRow: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.medium,
-    lineHeight: 18,
   },
 });

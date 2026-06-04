@@ -19,10 +19,8 @@ type AccountSidePanelProps = {
   roleLabel: string;
   facility?: string | null;
   role?: string | null;
-  unreadCount?: number;
   onClose: () => void;
   onSettings: () => void;
-  onNotifications?: () => void;
   onSignOut: () => void;
 };
 
@@ -50,10 +48,8 @@ export function AccountSidePanel({
   roleLabel,
   facility,
   role,
-  unreadCount = 0,
   onClose,
   onSettings,
-  onNotifications,
   onSignOut,
 }: AccountSidePanelProps) {
   const insets = useSafeAreaInsets();
@@ -110,15 +106,6 @@ export function AccountSidePanel({
               label="Settings"
               helper="Edit your personal information"
               onPress={onSettings}
-              showSeparatorBelow
-            />
-            <PanelAction
-              icon="notifications-outline"
-              label="Notifications"
-              helper={
-                unreadCount > 0 ? `${unreadCount} unread alerts` : undefined
-              }
-              onPress={() => onNotifications?.()}
               showSeparatorBelow
             />
             <PanelAction

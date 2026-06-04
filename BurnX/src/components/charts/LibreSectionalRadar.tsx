@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type ReactElement, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import {
   PixelRatio,
   Pressable,
@@ -8,6 +8,13 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import Svg, {
   Circle,
   Defs,
@@ -19,13 +26,6 @@ import Svg, {
   Stop,
   Text as SvgText,
 } from "react-native-svg";
-import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import type {
   LibreDashboardSubmissionSnapshot,
   LibreRadarDomainSlice,
@@ -401,8 +401,7 @@ export function LibreSectionalRadar({
           <Text style={[styles.captionMetaBelow, typography.micro]}>Now vs baseline</Text>
         </View>
         <Text style={[styles.subcaption, typography.caption]}>
-          Life Impact Burn Recovery Evaluation: shaded area shows your latest submission versus a
-          midpoint reference (approx. T-score {BASELINE_T}).
+          Libre Score Evaluation
         </Text>
         {submittedLine ? (
           <Text style={[styles.submittedStamp, typography.micro]}>

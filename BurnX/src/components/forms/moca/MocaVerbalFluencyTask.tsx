@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import {
   MOCA_VERBAL_FLUENCY_DURATION_MS,
   MOCA_VERBAL_FLUENCY_LETTER,
-  MOCA_VERBAL_FLUENCY_PASS_COUNT,
   type MocaVerbalFluencyCapture,
 } from "../../../constants/forms/moca";
 import {
@@ -13,27 +12,23 @@ import {
 } from "../../../lib/moca-verbal-fluency-scoring";
 import {
   createMocaSpeechRecognition,
+  getMocaSpeechUnavailableMessage,
   isMocaSpeechRecognitionAvailable,
 } from "../../../lib/moca-speech-recognition";
 import { runVerbalFluencyScript, stopMocaSpeech } from "../../../lib/moca-speech-synthesis";
 import { colors } from "../../../theme/colors";
 import { fontFamily } from "../../../theme/fontFamily";
-import { spacing } from "../../../theme/spacing";
-import { typography } from "../../../theme/typography";
+import { radius, spacing } from "../../../theme/spacing";
 import {
   MocaCompactButton,
   MocaInlineAlert,
-  MocaInlineNote,
   MocaMemoryListenRow,
   MocaMemoryPanel,
   MocaMemoryRecordingRow,
   MocaSectionHeader,
   MocaSectionRoot,
   MocaTaskCaption,
-  MocaTaskFooter,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 import { MocaVoiceMicButton } from "./MocaVoiceMicButton";
 
@@ -55,8 +50,6 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceCue, setVoiceCue] = useState("");
   const [recording, setRecording] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [interimTranscript, setInterimTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [remainMs, setRemainMs] = useState(MOCA_VERBAL_FLUENCY_DURATION_MS);
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
@@ -67,19 +60,11 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
   const recognitionRef = useRef<ReturnType<typeof createMocaSpeechRecognition>>(null);
 
   const listening = voiceActive;
-  const displayTranscript = useMemo(() => {
-    const base = transcript.trim();
-    const interim = interimTranscript.trim();
-    if (!interim) return base;
-    if (!base) return interim;
-    return `${base} ${interim}`;
-  }, [interimTranscript, transcript]);
 
   const stopRecording = useCallback(() => {
     recordingActiveRef.current = false;
     recognitionRef.current?.stop();
     recognitionRef.current = null;
-    setInterimTranscript("");
     setRecording(false);
   }, []);
 
@@ -97,8 +82,6 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
 
   const startSpeaking = useCallback(() => {
     setErrorMessage(null);
-    setTranscript("");
-    setInterimTranscript("");
     transcriptRef.current = "";
     setRemainMs(MOCA_VERBAL_FLUENCY_DURATION_MS);
     const startedAt = Date.now();
@@ -107,11 +90,7 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
     onCaptureChange(emptyVerbalFluencyCapture());
 
     if (!speechAvailable) {
-      setErrorMessage(
-        Platform.OS === "web"
-          ? "Speech recognition is not available in this browser. Try Chrome or Edge."
-          : "Live speech capture is web-first for now. Open MoCA in Chrome to test verbal fluency.",
-      );
+      setErrorMessage(getMocaSpeechUnavailableMessage());
       setPhase("speak_ready");
       return;
     }
@@ -119,14 +98,11 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
     const recognition = createMocaSpeechRecognition({
       onFinalTranscript: (text) => {
         transcriptRef.current = [transcriptRef.current, text].filter(Boolean).join(" ").trim();
-        setTranscript(transcriptRef.current);
-        setInterimTranscript("");
       },
-      onInterimTranscript: setInterimTranscript,
+      onInterimTranscript: () => {},
       onError: (message) => {
         setErrorMessage(message);
         recognitionRef.current = null;
-        setInterimTranscript("");
         setRecording(false);
         recordingActiveRef.current = false;
       },
@@ -141,7 +117,6 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
           return;
         }
         recognitionRef.current = null;
-        setInterimTranscript("");
         setRecording(false);
       },
     });
@@ -184,21 +159,6 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
     playInstructions();
   }, [onCaptureChange, playInstructions]);
 
-  const resetTask = useCallback(() => {
-    stopMocaSpeech();
-    stopRecording();
-    finishingRef.current = false;
-    setVoiceActive(false);
-    setVoiceCue("");
-    setErrorMessage(null);
-    setTranscript("");
-    transcriptRef.current = "";
-    setStartedAtMs(null);
-    setRemainMs(MOCA_VERBAL_FLUENCY_DURATION_MS);
-    setPhase("ready");
-    onCaptureChange(emptyVerbalFluencyCapture());
-  }, [onCaptureChange, stopRecording]);
-
   const stopEarly = useCallback(() => {
     if (startedAtMs === null) return;
     finishSpeaking(Date.now() - startedAtMs);
@@ -227,8 +187,6 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
       recognitionRef.current = null;
     };
   }, []);
-
-  const canStartOver = phase === "speak_ready" || phase === "complete";
 
   const primaryAction = (() => {
     if (listening) {
@@ -273,41 +231,28 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
       <MocaSectionHeader title="VERBAL FLUENCY" />
 
       <MocaTaskPrompt>
-        Tell me as many words as you can that begin with the letter {MOCA_VERBAL_FLUENCY_LETTER}.
-        Proper nouns, numbers, and different forms of the same verb are not allowed.
+        Say as many words starting with "{MOCA_VERBAL_FLUENCY_LETTER}" as you can.
       </MocaTaskPrompt>
 
-      <MocaTaskCaption>Up to one minute</MocaTaskCaption>
-
-      {listening ? <MocaMemoryListenRow cue={voiceCue || "Listen to the instructions."} /> : null}
-
-      {phase === "speaking" ? (
-        <Text style={[typography.caption, styles.countdown]}>{formatCountdown(remainMs)}</Text>
+      {phase === "ready" ? (
+        <MocaTaskCaption>No proper nouns, numbers, or verb forms</MocaTaskCaption>
       ) : null}
 
-      <MocaMemoryPanel>
-        {recording ? <MocaMemoryRecordingRow /> : null}
+      {listening ? <MocaMemoryListenRow cue={voiceCue || "Listen…"} /> : null}
 
-        {displayTranscript ? (
-          <MocaVoiceStatus body={displayTranscript} label="Live transcript" />
-        ) : null}
+      {phase === "speaking" ? (
+        <View style={styles.timerContainer}>
+          <Text style={styles.countdown}>{formatCountdown(remainMs)}</Text>
+          <Text style={styles.timerLabel}>remaining</Text>
+        </View>
+      ) : null}
 
-        {phase === "complete" ? (
-          <View style={styles.summaryStack}>
-            <MocaVoiceStatus
-              body={capture.validWords.map((entry) => entry.word).join(", ") || "—"}
-              footer={`${capture.validCount} valid F-words`}
-              label="Accepted words"
-            />
-            <MocaInlineNote>
-              MoCA score: {capture.score} / 1 point ({MOCA_VERBAL_FLUENCY_PASS_COUNT}+ valid words
-              required)
-            </MocaInlineNote>
-          </View>
-        ) : null}
-
-        {errorMessage ? <MocaInlineAlert message={errorMessage} /> : null}
-      </MocaMemoryPanel>
+      {(recording || errorMessage) ? (
+        <MocaMemoryPanel>
+          {recording ? <MocaMemoryRecordingRow /> : null}
+          {errorMessage ? <MocaInlineAlert message={errorMessage} /> : null}
+        </MocaMemoryPanel>
+      ) : null}
 
       {primaryAction ? (
         <View style={styles.actionBar}>
@@ -327,30 +272,34 @@ export function MocaVerbalFluencyTask({ capture, onCaptureChange }: MocaVerbalFl
           )}
         </View>
       ) : null}
-
-      {canStartOver ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
-      ) : null}
     </MocaSectionRoot>
   );
 }
 
 const styles = StyleSheet.create({
+  timerContainer: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
   countdown: {
     color: colors.text,
     fontFamily: fontFamily.bold,
-    fontSize: 32,
+    fontSize: 48,
     fontVariant: ["tabular-nums"],
-    textAlign: "center",
+    lineHeight: 56,
+  },
+  timerLabel: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.medium,
+    fontSize: 14,
+    marginTop: spacing.xs,
   },
   actionBar: {
     alignItems: "center",
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
     width: "100%",
-  },
-  summaryStack: {
-    gap: spacing.md,
   },
 });

@@ -48,7 +48,11 @@ export function VoiceCaptureRing({
   return (
     <View style={[styles.outer, style]}>
       {state === "active" ? <View style={styles.pulseHalo} /> : null}
-      <Svg height={VOICE_CAPTURE_RING_SIZE} width={VOICE_CAPTURE_RING_SIZE}>
+      <Svg
+        height={VOICE_CAPTURE_RING_SIZE}
+        pointerEvents="none"
+        width={VOICE_CAPTURE_RING_SIZE}
+      >
         <Circle
           cx={RING_CX}
           cy={RING_CY}

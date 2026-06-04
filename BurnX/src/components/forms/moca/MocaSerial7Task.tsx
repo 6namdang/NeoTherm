@@ -18,14 +18,10 @@ import { radius, spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 import {
   MocaCompactButton,
-  MocaInlineNote,
   MocaSectionHeader,
   MocaSectionRoot,
-  MocaTaskFooter,
   MocaTaskFrame,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 
 type MocaSerial7TaskProps = {
@@ -41,26 +37,18 @@ export function MocaSerial7Task({ capture, onCaptureChange }: MocaSerial7TaskPro
   const isComplete = capture.completedAt !== null;
   const displayAnswers = isComplete ? capture.answers : draftAnswers;
 
-  const updateAnswer = useCallback(
-    (index: number, value: string) => {
-      const sanitized = value.replace(/[^\d-]/g, "");
-      setDraftAnswers((prev) => {
-        const next = [...prev];
-        next[index] = sanitized;
-        return next;
-      });
-    },
-    [],
-  );
+  const updateAnswer = useCallback((index: number, value: string) => {
+    const sanitized = value.replace(/[^\d-]/g, "");
+    setDraftAnswers((prev) => {
+      const next = [...prev];
+      next[index] = sanitized;
+      return next;
+    });
+  }, []);
 
   const submitAnswers = useCallback(() => {
     onCaptureChange(scoreSerial7(draftAnswers));
   }, [draftAnswers, onCaptureChange]);
-
-  const resetTask = useCallback(() => {
-    setDraftAnswers(emptySerial7Answers());
-    onCaptureChange(emptySerial7Capture());
-  }, [onCaptureChange]);
 
   const canSubmit =
     !isComplete && draftAnswers.every((answer) => answer.trim().length > 0);
@@ -76,35 +64,20 @@ export function MocaSerial7Task({ capture, onCaptureChange }: MocaSerial7TaskPro
 
       <MocaTaskFrame style={styles.formFrame}>
         <View style={styles.fields}>
-          {Array.from({ length: MOCA_SERIAL7_SUBTRACTION_COUNT }, (_, index) => {
-            const result = capture.results[index];
-            return (
-              <View key={index} style={styles.fieldRow}>
-                <Text style={[typography.caption, styles.fieldLabel]}>{index + 1}.</Text>
-                <TextInput
-                  editable={!isComplete}
-                  keyboardType="number-pad"
-                  onChangeText={(value) => updateAnswer(index, value)}
-                  placeholder="Enter number"
-                  placeholderTextColor={colors.textMuted}
-                  style={[
-                    styles.input,
-                    typography.body,
-                    result && !result.correct ? styles.inputWrong : null,
-                    result?.correct ? styles.inputCorrect : null,
-                  ]}
-                  value={displayAnswers[index] ?? ""}
-                />
-                {isComplete && result ? (
-                  <Text style={[typography.caption, styles.fieldHint]}>
-                    {result.correct
-                      ? "Correct"
-                      : `Expected ${result.expected}${result.parsed === null ? "" : ` (you entered ${result.parsed})`}`}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })}
+          {Array.from({ length: MOCA_SERIAL7_SUBTRACTION_COUNT }, (_, index) => (
+            <View key={index} style={styles.fieldRow}>
+              <Text style={[typography.caption, styles.fieldLabel]}>{index + 1}.</Text>
+              <TextInput
+                editable={!isComplete}
+                keyboardType="number-pad"
+                onChangeText={(value) => updateAnswer(index, value)}
+                placeholder="Enter number"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.input, typography.body]}
+                value={displayAnswers[index] ?? ""}
+              />
+            </View>
+          ))}
         </View>
       </MocaTaskFrame>
 
@@ -112,25 +85,6 @@ export function MocaSerial7Task({ capture, onCaptureChange }: MocaSerial7TaskPro
         <View style={styles.actionBar}>
           <MocaCompactButton disabled={!canSubmit} title="Submit answers" onPress={submitAnswers} />
         </View>
-      ) : null}
-
-      {isComplete ? (
-        <View style={styles.summaryStack}>
-          <MocaVoiceStatus
-            body={`${capture.correctCount} of ${MOCA_SERIAL7_SUBTRACTION_COUNT} correct`}
-            footer={`MoCA score: ${capture.score} / 3 points`}
-            label="Result"
-          />
-          <MocaInlineNote>
-            4–5 correct: 3 pts · 2–3 correct: 2 pts · 1 correct: 1 pt · 0 correct: 0 pts
-          </MocaInlineNote>
-        </View>
-      ) : null}
-
-      {isComplete ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
       ) : null}
     </MocaSectionRoot>
   );
@@ -152,9 +106,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
   },
-  fieldHint: {
-    color: colors.textMuted,
-  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.borderStrong,
@@ -165,19 +116,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  inputCorrect: {
-    borderColor: colors.success,
-  },
-  inputWrong: {
-    borderColor: colors.danger,
-  },
   actionBar: {
     alignItems: "center",
     paddingTop: spacing.sm,
-    width: "100%",
-  },
-  summaryStack: {
-    gap: spacing.sm,
     width: "100%",
   },
 });

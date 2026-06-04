@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 
 import { MOCA_LANGUAGE_SENTENCES, type MocaLanguageCapture } from "../../../constants/forms/moca";
@@ -9,6 +9,7 @@ import {
 } from "../../../lib/moca-language-scoring";
 import {
   createMocaSpeechRecognition,
+  getMocaSpeechUnavailableMessage,
   isMocaSpeechRecognitionAvailable,
 } from "../../../lib/moca-speech-recognition";
 import {
@@ -20,17 +21,13 @@ import { spacing } from "../../../theme/spacing";
 import {
   MocaCompactButton,
   MocaInlineAlert,
-  MocaInlineNote,
   MocaMemoryListenRow,
   MocaMemoryPanel,
   MocaMemoryRecordingRow,
   MocaSectionHeader,
   MocaSectionRoot,
   MocaTaskCaption,
-  MocaTaskFooter,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 import { MocaVoiceMicButton } from "./MocaVoiceMicButton";
 
@@ -48,15 +45,6 @@ type MocaLanguageTaskProps = {
   capture: MocaLanguageCapture;
   onCaptureChange: (capture: MocaLanguageCapture) => void;
 };
-
-function sentenceFooter(result: MocaLanguageCapture["sentence1"]): string | undefined {
-  if (!result.transcript.trim()) return undefined;
-  if (result.correct) return "Exact match";
-  const parts: string[] = [];
-  if (result.missingWords.length > 0) parts.push(`Missing: ${result.missingWords.join(", ")}`);
-  if (result.extraWords.length > 0) parts.push(`Extra: ${result.extraWords.join(", ")}`);
-  return parts.length > 0 ? parts.join(" · ") : "Not an exact match";
-}
 
 export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskProps) {
   const speechAvailable = isMocaSpeechRecognitionAvailable();
@@ -76,20 +64,6 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
   const listening = voiceActive;
   const isRepeatPhase = phase === "sentence1_repeat" || phase === "sentence2_repeat";
   const sentenceLabel = phase.startsWith("sentence2") ? "Sentence 2" : "Sentence 1";
-
-  const activeSentenceKey: ActiveSentence | null =
-    phase === "sentence1_repeat" ? "sentence1" : phase === "sentence2_repeat" ? "sentence2" : null;
-
-  const activeSentence = activeSentenceKey ? capture[activeSentenceKey] : null;
-
-  const displayTranscript = useMemo(() => {
-    if (!activeSentence) return "";
-    const base = activeSentence.transcript.trim();
-    const interim = interimTranscript.trim();
-    if (!interim) return base;
-    if (!base) return interim;
-    return `${base} ${interim}`;
-  }, [activeSentence, interimTranscript]);
 
   const stopRecording = useCallback(() => {
     recognitionRef.current?.stop();
@@ -118,11 +92,7 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
     if (!key) return;
 
     if (!speechAvailable) {
-      setErrorMessage(
-        Platform.OS === "web"
-          ? "Speech recognition is not available in this browser. Try Chrome or Edge."
-          : "Live speech capture is web-first for now. Open MoCA in Chrome to test sentence repetition.",
-      );
+      setErrorMessage(getMocaSpeechUnavailableMessage());
       return;
     }
 
@@ -209,18 +179,6 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
     playSentence2Script();
   }, [playSentence2Script, updateSentenceCapture]);
 
-  const resetTask = useCallback(() => {
-    stopRecording();
-    stopMocaSpeech();
-    setVoiceActive(false);
-    setVoiceCue("");
-    setErrorMessage(null);
-    setInterimTranscript("");
-    activeSentenceRef.current = null;
-    setPhase("ready");
-    onCaptureChange(emptyLanguageCapture());
-  }, [onCaptureChange, stopRecording]);
-
   const stopAndAdvance = useCallback(() => {
     stopRecording();
     const key = activeSentenceRef.current;
@@ -243,13 +201,6 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
       recognitionRef.current = null;
     };
   }, []);
-
-  const canStartOver =
-    phase !== "ready" &&
-    !listening &&
-    !recording &&
-    phase !== "sentence1_listen" &&
-    phase !== "sentence2_listen";
 
   const primaryAction = (() => {
     if (listening) {
@@ -306,33 +257,6 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
 
       <MocaMemoryPanel>
         {recording ? <MocaMemoryRecordingRow /> : null}
-
-        {displayTranscript ? (
-          <MocaVoiceStatus
-            body={displayTranscript}
-            footer={activeSentence ? sentenceFooter(activeSentence) : undefined}
-            label="Your repetition"
-          />
-        ) : null}
-
-        {phase === "complete" ? (
-          <View style={styles.summaryStack}>
-            <MocaVoiceStatus
-              body={capture.sentence1.transcript || "—"}
-              footer={sentenceFooter(capture.sentence1)}
-              label="Sentence 1"
-            />
-            <MocaVoiceStatus
-              body={capture.sentence2.transcript || "—"}
-              footer={sentenceFooter(capture.sentence2)}
-              label="Sentence 2"
-            />
-            <MocaInlineNote>
-              MoCA score: {capture.score} / 2 points (1 point per exact repetition)
-            </MocaInlineNote>
-          </View>
-        ) : null}
-
         {errorMessage ? <MocaInlineAlert message={errorMessage} /> : null}
       </MocaMemoryPanel>
 
@@ -354,12 +278,6 @@ export function MocaLanguageTask({ capture, onCaptureChange }: MocaLanguageTaskP
           )}
         </View>
       ) : null}
-
-      {canStartOver ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
-      ) : null}
     </MocaSectionRoot>
   );
 }
@@ -369,8 +287,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: spacing.xs,
     width: "100%",
-  },
-  summaryStack: {
-    gap: spacing.md,
   },
 });

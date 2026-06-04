@@ -1,8 +1,4 @@
-import {
-  ExpoSpeechRecognitionModule,
-  type ExpoSpeechRecognitionErrorEvent,
-  type ExpoSpeechRecognitionResultEvent,
-} from "expo-speech-recognition";
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { Platform } from "react-native";
 
 import type { MocaNamingAnimal } from "./moca-naming-detection";
@@ -17,6 +13,7 @@ export type MocaNamingCapture = {
   transcript: string;
   detectedAnimals: MocaNamingAnimal[];
   score: 0 | 1 | 2 | 3;
+  completedAt: number | null;
 };
 
 type SpeechRecognitionCtor = new () => WebSpeechRecognitionInstance;
@@ -44,11 +41,68 @@ type WebSpeechRecognitionResultEvent = {
   };
 };
 
+type NativeSpeechErrorEvent = {
+  error: string;
+  message?: string;
+};
+
+type NativeSpeechResultEvent = {
+  isFinal: boolean;
+  results: Array<{ transcript?: string }>;
+};
+
+type NativeSpeechModule = {
+  isRecognitionAvailable: () => boolean;
+  requestPermissionsAsync: () => Promise<{ granted: boolean }>;
+  start: (options: {
+    lang: string;
+    interimResults: boolean;
+    continuous: boolean;
+  }) => void;
+  stop: () => void;
+  abort: () => void;
+  addListener: (
+    event: "result" | "error" | "end",
+    listener: (event: NativeSpeechResultEvent | NativeSpeechErrorEvent) => void,
+  ) => { remove: () => void };
+};
+
 export type MocaSpeechRecognitionHandle = {
   start: () => void;
   stop: () => void;
   abort: () => void;
 };
+
+/** Shown when expo-speech-recognition is not linked into the installed dev client. */
+export const MOCA_NATIVE_STT_REBUILD_MESSAGE =
+  "Speech recognition needs a native rebuild. On your Mac run: npm run ios:device (then reconnect via tunnel or LAN).";
+
+let nativeSpeechModuleCache: NativeSpeechModule | null | undefined;
+
+function getNativeSpeechModule(): NativeSpeechModule | null {
+  if (nativeSpeechModuleCache !== undefined) {
+    return nativeSpeechModuleCache;
+  }
+  if (Platform.OS === "web") {
+    nativeSpeechModuleCache = null;
+    return null;
+  }
+
+  // Do NOT require("expo-speech-recognition") here — that package calls
+  // requireNativeModule("ExpoSpeechRecognition") at load time and throws if the
+  // dev client was built before the plugin was added. Optional lookup is safe.
+  nativeSpeechModuleCache =
+    requireOptionalNativeModule<NativeSpeechModule>("ExpoSpeechRecognition");
+
+  if (!nativeSpeechModuleCache && __DEV__) {
+    console.warn(
+      "[MoCA] Native module ExpoSpeechRecognition is not in this app binary. " +
+        "Run npm run ios:device on your Mac (USB) to rebuild the dev client.",
+    );
+  }
+
+  return nativeSpeechModuleCache;
+}
 
 function getWebSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   if (Platform.OS !== "web" || typeof window === "undefined") return null;
@@ -59,14 +113,34 @@ function getWebSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+export function isMocaNativeSpeechModuleLinked(): boolean {
+  return getNativeSpeechModule() !== null;
+}
+
+export function getMocaSpeechUnavailableMessage(): string {
+  if (Platform.OS === "web") {
+    return "Speech recognition is not available in this browser. Try Chrome or Edge.";
+  }
+  if (!isMocaNativeSpeechModuleLinked()) {
+    return MOCA_NATIVE_STT_REBUILD_MESSAGE;
+  }
+  return "Speech recognition is not available on this device.";
+}
+
 export function isMocaSpeechRecognitionAvailable(): boolean {
   if (Platform.OS === "web") {
     return getWebSpeechRecognitionCtor() !== null;
   }
-  return ExpoSpeechRecognitionModule.isRecognitionAvailable();
+  const native = getNativeSpeechModule();
+  if (!native) return false;
+  try {
+    return native.isRecognitionAvailable();
+  } catch {
+    return false;
+  }
 }
 
-function mapSpeechError(event: ExpoSpeechRecognitionErrorEvent | { error: string }): string {
+function mapSpeechError(event: NativeSpeechErrorEvent | { error: string }): string {
   const code = "error" in event ? event.error : "";
   if (code === "not-allowed" || code === "permission_denied") {
     return "Microphone or speech recognition access was blocked. Enable permissions in Settings.";
@@ -86,16 +160,26 @@ function createNativeSpeechRecognition(handlers: {
   onError: (message: string) => void;
   onEnd: () => void;
 }): MocaSpeechRecognitionHandle | null {
-  if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) return null;
+  const module = getNativeSpeechModule();
+  if (!module) return null;
+
+  let available = false;
+  try {
+    available = module.isRecognitionAvailable();
+  } catch {
+    return null;
+  }
+  if (!available) return null;
 
   let active = false;
   let lastFinal = "";
   const subscriptions = [
-    ExpoSpeechRecognitionModule.addListener("result", (event: ExpoSpeechRecognitionResultEvent) => {
+    module.addListener("result", (event) => {
       if (!active) return;
-      const text = event.results[0]?.transcript?.trim() ?? "";
+      const resultEvent = event as NativeSpeechResultEvent;
+      const text = resultEvent.results[0]?.transcript?.trim() ?? "";
       if (!text) return;
-      if (event.isFinal) {
+      if (resultEvent.isFinal) {
         lastFinal = [lastFinal, text].filter(Boolean).join(" ").trim();
         handlers.onFinalTranscript(text);
         handlers.onInterimTranscript("");
@@ -103,12 +187,12 @@ function createNativeSpeechRecognition(handlers: {
         handlers.onInterimTranscript(text);
       }
     }),
-    ExpoSpeechRecognitionModule.addListener("error", (event: ExpoSpeechRecognitionErrorEvent) => {
+    module.addListener("error", (event) => {
       if (!active) return;
       active = false;
-      handlers.onError(mapSpeechError(event));
+      handlers.onError(mapSpeechError(event as NativeSpeechErrorEvent));
     }),
-    ExpoSpeechRecognitionModule.addListener("end", () => {
+    module.addListener("end", () => {
       if (!active) return;
       active = false;
       handlers.onEnd();
@@ -118,7 +202,7 @@ function createNativeSpeechRecognition(handlers: {
   return {
     start: () => {
       void (async () => {
-        const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        const permission = await module.requestPermissionsAsync();
         if (!permission.granted) {
           handlers.onError(
             "Microphone or speech recognition permission was denied. Enable it in Settings.",
@@ -127,7 +211,7 @@ function createNativeSpeechRecognition(handlers: {
         }
         lastFinal = "";
         active = true;
-        ExpoSpeechRecognitionModule.start({
+        module.start({
           lang: "en-US",
           interimResults: true,
           continuous: true,
@@ -137,11 +221,11 @@ function createNativeSpeechRecognition(handlers: {
     stop: () => {
       if (!active) return;
       active = false;
-      ExpoSpeechRecognitionModule.stop();
+      module.stop();
     },
     abort: () => {
       active = false;
-      ExpoSpeechRecognitionModule.abort();
+      module.abort();
       subscriptions.forEach((sub) => sub.remove());
     },
   };

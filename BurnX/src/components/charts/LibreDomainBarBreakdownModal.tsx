@@ -484,8 +484,7 @@ function ModalBody({
               How to read this
             </Text>
             <Text style={[typography.caption, styles.insightLine]}>
-              • Bars are approximate PROM-style T-scores; {BASELINE_REFERENCE} is a
-              population midpoint, not your personal baseline.
+            The bars show estimated scores. {BASELINE_REFERENCE} represents the average person, not your personal baseline.
             </Text>
             <Text style={[typography.caption, styles.insightLine]}>
               • Partial questionnaires may leave sections blank (“n/a”).

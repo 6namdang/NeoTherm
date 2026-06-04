@@ -126,7 +126,6 @@ export function ScaleFormRunner({
         form_id: instrument.id,
         answers: { ...finalAnswers },
       });
-      await onSubmitted(finalAnswers);
     } catch (caught) {
       bxLog("forms", "submit failed", { formId, caught });
       const detail =
@@ -136,8 +135,15 @@ export function ScaleFormRunner({
           ? `Your responses were not saved.\n\n${detail}\n\nCheck your connection or sign in again. If this continues, contact your care team or hospital support.`
           : submitErrorMessage;
       Alert.alert("Unable to submit", body);
+      return;
     } finally {
       setBusy(false);
+    }
+
+    try {
+      await onSubmitted(finalAnswers);
+    } catch (caught) {
+      bxLog("forms", "post-submit navigation failed", { formId, caught });
     }
   }
 

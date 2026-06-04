@@ -26,6 +26,7 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow NeoTherm to estimate time at home and outside home using low-power home boundary events, even when the app is closed.",
         "NSLocalNetworkUsageDescription": "Allow NeoTherm to connect to the Metro development server on your local network during development.",
         "NSBonjourServices": [
+          "_expo._tcp",
           "_expo._tcp"
         ],
         "NSAppTransportSecurity": {
@@ -42,8 +43,10 @@
           }
         },
         "UIBackgroundModes": [
+          "location",
           "location"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -113,6 +116,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bc32d708-b825-4212-a86e-3a8f5f28a158"
+      }
     }
   }
 }

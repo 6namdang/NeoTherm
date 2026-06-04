@@ -25,6 +25,8 @@ type ScreenProps = PropsWithChildren<{
   animateEntry?: boolean;
   /** Pass `<RefreshControl />` so screens can re-fetch remote source-of-truth data (e.g. Assignments). */
   refreshControl?: ScrollViewProps["refreshControl"];
+  /** When `scroll` is true, disable vertical scroll (e.g. while drawing on a canvas). */
+  scrollEnabled?: boolean;
   onScroll?: ScrollViewProps["onScroll"];
   scrollEventThrottle?: number;
 }>;
@@ -47,6 +49,7 @@ export function Screen({
   keyboardAvoid,
   animateEntry,
   refreshControl,
+  scrollEnabled = true,
   onScroll,
   scrollEventThrottle = 16,
 }: ScreenProps) {
@@ -94,6 +97,7 @@ export function Screen({
       keyboardShouldPersistTaps="handled"
       onScroll={onScroll}
       refreshControl={refreshControl}
+      scrollEnabled={scrollEnabled}
       scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={scrollContentContainer}

@@ -16,7 +16,9 @@ import {
 import {
   careProgramsTabHrefForFormId,
   isLongAssessmentMemberFormId,
+  mocaFormHref,
 } from "../../../src/lib/care-program-form-groups";
+import { MOCA_FORM_ID, isMocaStandaloneTestingEnabled } from "../../../src/constants/forms/moca";
 import { bxLog } from "../../../src/lib/debug-log";
 import {
   persistAssignmentSubmissionClientTime,
@@ -62,6 +64,11 @@ export default function FormRunnerScreen() {
     let cancelled = false;
 
     (async () => {
+      if (formId === MOCA_FORM_ID && isMocaStandaloneTestingEnabled()) {
+        router.replace(mocaFormHref());
+        return;
+      }
+
       if (isLongAssessmentMemberFormId(formId)) {
         const boot = await bootstrapLongAssessmentSession();
         const active = await hasActiveLongAssessmentSession(boot.snap.programDay);

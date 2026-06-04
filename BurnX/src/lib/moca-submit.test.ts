@@ -17,7 +17,7 @@ import {
   emptyDigitSpanCapture,
   scoreDigitSpanForward,
 } from "./moca-digit-span-scoring";
-import { scoreNaming } from "./moca-naming-scoring";
+import { completeNamingCapture, scoreNaming } from "./moca-naming-scoring";
 import type { MocaRunnerState } from "./moca-runner-state";
 import { scoreAbstraction } from "./moca-abstraction-scoring";
 import { scoreSerial7 } from "./moca-serial7-scoring";
@@ -110,7 +110,7 @@ function completeRunnerState(overrides: Partial<MocaRunnerState> = {}): MocaRunn
     trailSequence: [...MOCA_TRAIL_SEQUENCE],
     cubeStrokes: [STROKE],
     clockStrokes: [STROKE],
-    namingCapture: scoreNaming("lion rhinoceros dromedary"),
+    namingCapture: completeNamingCapture(scoreNaming("lion rhinoceros dromedary")),
     memoryCapture: completeMemoryCapture(),
     digitSpanCapture: completeDigitSpan(),
     vigilanceCapture: completeVigilance(),

@@ -24,6 +24,7 @@ import { getFormById } from "../../../src/constants/forms";
 import {
   bootstrapLongAssessmentSession,
   markLongAssessmentFormComplete,
+  mergeCompletedFormIds,
   startLongAssessmentSession,
 } from "../../../src/lib/long-assessment-session";
 import type { LongAssessmentSnapshot } from "../../../src/lib/long-assessment-eligibility";
@@ -45,6 +46,7 @@ export default function LongAssessmentScreen() {
   const [snap, setSnap] = useState<LongAssessmentSnapshot | null>(null);
   const [activeFormId, setActiveFormId] = useState<string | null>(null);
   const [headerLine, setHeaderLine] = useState("");
+  const [mocaScrollEnabled, setMocaScrollEnabled] = useState(true);
 
   const totalSections = LONG_FORM_IDS.length;
   const activeIndex = activeFormId
@@ -89,6 +91,12 @@ export default function LongAssessmentScreen() {
   }, []);
 
   useEffect(() => {
+    if (activeFormId !== MOCA_FORM_ID) {
+      setMocaScrollEnabled(true);
+    }
+  }, [activeFormId]);
+
+  useEffect(() => {
     if (!activeFormId) return;
     void (async () => {
       const injuryDate = await getBurnInjuryDate();
@@ -116,27 +124,31 @@ export default function LongAssessmentScreen() {
       bxLog("forms", "cache write failed (non-fatal)", { formId, cacheErr });
     }
 
-    await markLongAssessmentFormComplete(formId, snap.programDay);
+    const session = await markLongAssessmentFormComplete(formId, snap.programDay);
 
-    const refreshed = await bootstrapLongAssessmentSession();
-    setSnap(refreshed.snap);
+    const completedFormIds = mergeCompletedFormIds(snap.completedFormIds, [formId]);
+    const remainingFormIds = LONG_FORM_IDS.filter((id) => !completedFormIds.includes(id));
+    setSnap({
+      ...snap,
+      completedFormIds,
+      remainingFormIds,
+      pending: remainingFormIds.length > 0,
+    });
 
-    if (!refreshed.snap.pending) {
+    if (!session) {
       setPhase("complete");
       setActiveFormId(null);
-      return;
+    } else {
+      setActiveFormId(session.activeFormId);
     }
 
-    const nextFormId =
-      refreshed.session?.activeFormId ??
-      refreshed.snap.remainingFormIds[0] ??
-      null;
-    if (!nextFormId) {
-      setPhase("complete");
-      setActiveFormId(null);
-      return;
-    }
-    setActiveFormId(nextFormId);
+    void bootstrapLongAssessmentSession()
+      .then((refreshed) => {
+        setSnap(refreshed.snap);
+      })
+      .catch((refreshErr) => {
+        bxLog("forms", "long assessment refresh failed (non-fatal)", { formId, refreshErr });
+      });
   }
 
   const progressText = useMemo(() => {
@@ -210,7 +222,12 @@ export default function LongAssessmentScreen() {
 
   if (phase === "running" && activeFormId) {
     return (
-      <Screen animateEntry preset="stack" scroll>
+      <Screen
+        animateEntry
+        preset="stack"
+        scroll
+        scrollEnabled={activeFormId === MOCA_FORM_ID ? mocaScrollEnabled : true}
+      >
         <StatusBar style="dark" />
         <PageHeader
           eyebrow="Long assessment"
@@ -220,6 +237,7 @@ export default function LongAssessmentScreen() {
         <Text style={[styles.progressLine, typography.caption]}>{progressText}</Text>
         {activeFormId === MOCA_FORM_ID ? (
           <MocaFormRunner
+            onParentScrollEnabledChange={setMocaScrollEnabled}
             onSubmitted={async () => {
               await onInstrumentSubmitted(activeFormId);
             }}

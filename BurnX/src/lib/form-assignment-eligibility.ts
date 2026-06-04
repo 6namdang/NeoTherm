@@ -1,5 +1,6 @@
 import { getFormById } from "../constants/forms";
 import { isEmaFormId } from "../constants/ema-forms";
+import { MOCA_FORM_ID, isMocaStandaloneTestingEnabled } from "../constants/forms/moca";
 import type { AssignmentDailyLocalStart } from "../constants/forms/types";
 import { resolveEmaAssignmentSnapshot } from "./ema-assignment-eligibility";
 import { getBurnInjuryDate, getLastCompletion } from "./burn-date";
@@ -156,6 +157,18 @@ export async function resolveAssignmentSnapshot(
   }
 
   try {
+    if (formId === MOCA_FORM_ID && isMocaStandaloneTestingEnabled()) {
+      const [injuryDate, serverLast] = await Promise.all([
+        getBurnInjuryDate(),
+        getLastCompletion(formId),
+      ]);
+      return {
+        pending: true,
+        lastCompletedAt: serverLast,
+        injuryDate,
+      };
+    }
+
     if (isLongAssessmentMemberFormId(formId)) {
       return {
         pending: false,

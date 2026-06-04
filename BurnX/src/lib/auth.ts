@@ -1,4 +1,5 @@
 import { COGNITO } from "../../aws-config";
+import { clearAllDashboardCaches } from "./dashboard-cache";
 import { bxLog } from "./debug-log";
 import { clearEmaTodayState } from "./ema-today-state";
 import { clearAssignmentCachesForSub } from "./form-assignment-cache-storage";
@@ -235,6 +236,7 @@ export async function signOut() {
   if (sub) {
     await clearAssignmentCachesForSub(sub);
   }
+  await clearAllDashboardCaches();
   await deleteStorageItem("accessToken");
   await deleteStorageItem("idToken");
   await deleteStorageItem("refreshToken");

@@ -17,14 +17,10 @@ import { radius, spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 import {
   MocaCompactButton,
-  MocaInlineNote,
   MocaSectionHeader,
   MocaSectionRoot,
-  MocaTaskFooter,
   MocaTaskFrame,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 
 type MocaAbstractionTaskProps = {
@@ -52,11 +48,6 @@ export function MocaAbstractionTask({ capture, onCaptureChange }: MocaAbstractio
     onCaptureChange(scoreAbstraction(draftAnswers));
   }, [draftAnswers, onCaptureChange]);
 
-  const resetTask = useCallback(() => {
-    setDraftAnswers(emptyAbstractionAnswers());
-    onCaptureChange(emptyAbstractionCapture());
-  }, [onCaptureChange]);
-
   const canSubmit = !isComplete && draftAnswers.every((answer) => answer.trim().length > 0);
 
   return (
@@ -72,7 +63,7 @@ export function MocaAbstractionTask({ capture, onCaptureChange }: MocaAbstractio
         <Text style={[typography.body, styles.pairTitle]}>
           {MOCA_ABSTRACTION_EXAMPLE.left} — {MOCA_ABSTRACTION_EXAMPLE.right}
         </Text>
-        <Text style={[typography.body, styles.question]}>What do these have in common?</Text>
+        <Text style={[typography.caption, styles.question]}>What do these have in common?</Text>
         <Text style={[typography.caption, styles.exampleAnswer]}>
           e.g. {MOCA_ABSTRACTION_EXAMPLE.sampleAnswer}
         </Text>
@@ -80,35 +71,22 @@ export function MocaAbstractionTask({ capture, onCaptureChange }: MocaAbstractio
 
       <MocaTaskFrame style={styles.formFrame}>
         <View style={styles.fields}>
-          {MOCA_ABSTRACTION_PAIRS.map((pair, index) => {
-            const result = capture.results[index];
-            return (
-              <View key={pair.id} style={styles.fieldBlock}>
-                <Text style={[typography.body, styles.pairTitle]}>
-                  {pair.left} — {pair.right}
-                </Text>
-                <Text style={[typography.caption, styles.question]}>What do these have in common?</Text>
-                <TextInput
-                  editable={!isComplete}
-                  onChangeText={(value) => updateAnswer(index, value)}
-                  placeholder="Type your answer"
-                  placeholderTextColor={colors.textMuted}
-                  style={[
-                    styles.input,
-                    typography.body,
-                    result && !result.correct ? styles.inputWrong : null,
-                    result?.correct ? styles.inputCorrect : null,
-                  ]}
-                  value={displayAnswers[index] ?? ""}
-                />
-                {isComplete && result ? (
-                  <Text style={[typography.caption, styles.fieldHint]}>
-                    {result.correct ? "Accepted" : "Not matched — review manually if needed"}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })}
+          {MOCA_ABSTRACTION_PAIRS.map((pair, index) => (
+            <View key={pair.id} style={styles.fieldBlock}>
+              <Text style={[typography.body, styles.pairTitle]}>
+                {pair.left} — {pair.right}
+              </Text>
+              <Text style={[typography.caption, styles.question]}>What do these have in common?</Text>
+              <TextInput
+                editable={!isComplete}
+                onChangeText={(value) => updateAnswer(index, value)}
+                placeholder="Type your answer"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.input, typography.body]}
+                value={displayAnswers[index] ?? ""}
+              />
+            </View>
+          ))}
         </View>
       </MocaTaskFrame>
 
@@ -116,23 +94,6 @@ export function MocaAbstractionTask({ capture, onCaptureChange }: MocaAbstractio
         <View style={styles.actionBar}>
           <MocaCompactButton disabled={!canSubmit} title="Submit answers" onPress={submitAnswers} />
         </View>
-      ) : null}
-
-      {isComplete ? (
-        <View style={styles.summaryStack}>
-          <MocaVoiceStatus
-            body={`${capture.correctCount} of ${MOCA_ABSTRACTION_PAIRS.length} accepted`}
-            footer={`MoCA score: ${capture.score} / 2 points`}
-            label="Result"
-          />
-          <MocaInlineNote>1 point per pair when the similarity category is correct.</MocaInlineNote>
-        </View>
-      ) : null}
-
-      {isComplete ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
       ) : null}
     </MocaSectionRoot>
   );
@@ -172,9 +133,6 @@ const styles = StyleSheet.create({
   question: {
     color: colors.textSecondary,
   },
-  fieldHint: {
-    color: colors.textMuted,
-  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.borderStrong,
@@ -185,19 +143,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  inputCorrect: {
-    borderColor: colors.success,
-  },
-  inputWrong: {
-    borderColor: colors.danger,
-  },
   actionBar: {
     alignItems: "center",
     paddingTop: spacing.sm,
-    width: "100%",
-  },
-  summaryStack: {
-    gap: spacing.sm,
     width: "100%",
   },
 });

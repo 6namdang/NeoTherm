@@ -21,10 +21,7 @@ export function validateMocaRunnerState(state: MocaRunnerState): void {
   );
   assert(state.cubeStrokes.length > 0, "Draw the cube before submitting.");
   assert(state.clockStrokes.length > 0, "Draw the clock before submitting.");
-  assert(
-    state.namingCapture.detectedAnimals.length >= 3,
-    "Name all three animals before submitting.",
-  );
+  assert(state.namingCapture.completedAt !== null, "Complete the naming task before submitting.");
   assert(state.memoryCapture.recallAvailableAt !== null, "Complete both memory learning trials.");
   assert(
     state.memoryCapture.delayedRecall.transcript.trim().length > 0,
@@ -40,4 +37,13 @@ export function validateMocaRunnerState(state: MocaRunnerState): void {
   assert(state.languageCapture.completedAt !== null, "Complete both language sentences.");
   assert(state.verbalFluencyCapture.completedAt !== null, "Complete verbal fluency.");
   assert(state.abstractionCapture.completedAt !== null, "Complete abstraction.");
+}
+
+export function isMocaRunnerSubmitReady(state: MocaRunnerState): boolean {
+  try {
+    validateMocaRunnerState(state);
+    return true;
+  } catch {
+    return false;
+  }
 }

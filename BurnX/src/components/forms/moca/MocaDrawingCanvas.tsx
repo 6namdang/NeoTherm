@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   LayoutChangeEvent,
   PanResponder,
+  PixelRatio,
   StyleSheet,
   View,
   type GestureResponderEvent,
@@ -10,12 +11,13 @@ import Svg, { Path } from "react-native-svg";
 
 import type { MocaDrawingStroke } from "../../../constants/forms/moca";
 import { colors } from "../../../theme/colors";
-import { radius, spacing } from "../../../theme/spacing";
+import { radius } from "../../../theme/spacing";
 
 const CANVAS_ASPECT = 4 / 3;
 const STROKE_WIDTH = 3;
 
 type Point = { x: number; y: number };
+type CanvasSize = { width: number; height: number };
 
 function touchPoint(event: GestureResponderEvent): Point {
   return {
@@ -41,62 +43,105 @@ function normalizeStrokes(
   );
 }
 
-function denormalizePoint(point: Point, width: number, height: number): MocaDrawingStroke["points"][number] {
+function denormalizePoint(
+  point: Point,
+  width: number,
+  height: number,
+): MocaDrawingStroke["points"][number] {
   return {
     x: Math.min(1, Math.max(0, point.x / width)),
     y: Math.min(1, Math.max(0, point.y / height)),
   };
 }
 
+function sameCanvasSize(a: CanvasSize, b: CanvasSize): boolean {
+  return a.width === b.width && a.height === b.height;
+}
+
 type MocaDrawingCanvasProps = {
   strokes: MocaDrawingStroke[];
   onStrokesChange: (strokes: MocaDrawingStroke[]) => void;
+  /** Called while the user is actively drawing — use to disable parent ScrollView. */
+  onDrawingActiveChange?: (active: boolean) => void;
 };
 
-export function MocaDrawingCanvas({ strokes, onStrokesChange }: MocaDrawingCanvasProps) {
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+export function MocaDrawingCanvas({
+  strokes,
+  onStrokesChange,
+  onDrawingActiveChange,
+}: MocaDrawingCanvasProps) {
+  const [canvasSize, setCanvasSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [livePoints, setLivePoints] = useState<Point[]>([]);
+
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
   const sizeRef = useRef(canvasSize);
   sizeRef.current = canvasSize;
+  const livePointsRef = useRef<Point[]>([]);
+  const drawingActiveRef = useRef(false);
+  const onDrawingActiveChangeRef = useRef(onDrawingActiveChange);
+  onDrawingActiveChangeRef.current = onDrawingActiveChange;
+
+  const setDrawingActive = useCallback((active: boolean) => {
+    if (drawingActiveRef.current === active) return;
+    drawingActiveRef.current = active;
+    onDrawingActiveChangeRef.current?.(active);
+  }, []);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width } = event.nativeEvent.layout;
-    if (width <= 0) return;
-    setCanvasSize({ width, height: width / CANVAS_ASPECT });
+    const width = PixelRatio.roundToNearestPixel(event.nativeEvent.layout.width);
+    const height = PixelRatio.roundToNearestPixel(event.nativeEvent.layout.height);
+    if (width <= 0 || height <= 0) return;
+    setCanvasSize((prev) => {
+      const next = { width, height };
+      return sameCanvasSize(prev, next) ? prev : next;
+    });
   }, []);
+
+  const commitLiveStroke = useCallback(() => {
+    const points = livePointsRef.current;
+    livePointsRef.current = [];
+    setLivePoints([]);
+    setDrawingActive(false);
+
+    if (points.length === 0) return;
+    const { width, height } = sizeRef.current;
+    if (width <= 0 || height <= 0) return;
+
+    onStrokesChange([
+      ...strokesRef.current,
+      { points: points.map((p) => denormalizePoint(p, width, height)) },
+    ]);
+  }, [onStrokesChange, setDrawingActive]);
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (event) => {
-          setLivePoints([touchPoint(event)]);
+          const pt = touchPoint(event);
+          livePointsRef.current = [pt];
+          setLivePoints([pt]);
+          setDrawingActive(true);
         },
         onPanResponderMove: (event) => {
           const pt = touchPoint(event);
-          setLivePoints((prev) => [...prev, pt]);
+          livePointsRef.current = [...livePointsRef.current, pt];
+          setLivePoints(livePointsRef.current);
         },
-        onPanResponderRelease: () => {
-          setLivePoints((prev) => {
-            if (prev.length === 0) return [];
-            const { width, height } = sizeRef.current;
-            if (width <= 0 || height <= 0) return [];
-            const normalized = prev.map((p) => denormalizePoint(p, width, height));
-            onStrokesChange([
-              ...strokesRef.current,
-              { points: normalized },
-            ]);
-            return [];
-          });
-        },
+        onPanResponderRelease: commitLiveStroke,
         onPanResponderTerminate: () => {
+          livePointsRef.current = [];
           setLivePoints([]);
+          setDrawingActive(false);
         },
       }),
-    [onStrokesChange],
+    [commitLiveStroke, setDrawingActive],
   );
 
   const renderedStrokes = useMemo(
@@ -105,12 +150,21 @@ export function MocaDrawingCanvas({ strokes, onStrokesChange }: MocaDrawingCanva
   );
 
   return (
-    <View onLayout={onLayout} style={styles.canvasWrap} {...panResponder.panHandlers}>
-      {canvasSize.width > 0 ? (
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={[
+        styles.canvasWrap,
+        canvasSize.height > 0 ? { height: canvasSize.height } : null,
+      ]}
+      {...panResponder.panHandlers}
+    >
+      {canvasSize.width > 0 && canvasSize.height > 0 ? (
         <Svg
           height={canvasSize.height}
           pointerEvents="none"
           style={styles.canvasSvg}
+          viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
           width={canvasSize.width}
         >
           {renderedStrokes.map((points, i) => (
@@ -151,8 +205,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   canvasSvg: {
-    position: "absolute",
-    left: 0,
-    top: 0,
+    ...StyleSheet.absoluteFillObject,
   },
 });

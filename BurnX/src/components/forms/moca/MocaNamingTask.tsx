@@ -1,25 +1,23 @@
 import { Image } from "expo-image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { VoiceCaptureRing, type VoiceCaptureRingState } from "../../voice/VoiceCaptureRing";
 import {
   createMocaSpeechRecognition,
+  getMocaSpeechUnavailableMessage,
   isMocaSpeechRecognitionAvailable,
+  MOCA_NATIVE_STT_REBUILD_MESSAGE,
   type MocaNamingCapture,
 } from "../../../lib/moca-speech-recognition";
-import { scoreNaming } from "../../../lib/moca-naming-scoring";
-import { spacing } from "../../../theme/spacing";
+import { completeNamingCapture, scoreNaming } from "../../../lib/moca-naming-scoring";
+import { radius, spacing } from "../../../theme/spacing";
 import {
   MocaInlineAlert,
   MocaSectionHeader,
   MocaSectionRoot,
-  MocaTaskCaption,
-  MocaTaskFooter,
   MocaTaskFrame,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 import { MocaVoiceMicButton } from "./MocaVoiceMicButton";
 
@@ -36,46 +34,47 @@ export function MocaNamingTask({ capture, onCaptureChange }: MocaNamingTaskProps
   const speechAvailable = isMocaSpeechRecognitionAvailable();
   const [phase, setPhase] = useState<SpeakPhase>("idle");
   const [interimTranscript, setInterimTranscript] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    !speechAvailable ? MOCA_NATIVE_STT_REBUILD_MESSAGE : null,
+  );
   const recognitionRef = useRef<ReturnType<typeof createMocaSpeechRecognition>>(null);
   const captureRef = useRef(capture);
   captureRef.current = capture;
 
-  const hasCapture = capture.transcript.trim().length > 0;
   const speaking = phase === "speaking";
-
-  const displayTranscript = useMemo(() => {
-    const base = capture.transcript.trim();
-    const interim = interimTranscript.trim();
-    if (!interim) return base;
-    if (!base) return interim;
-    return `${base} ${interim}`;
-  }, [capture.transcript, interimTranscript]);
+  const finished = capture.completedAt !== null;
 
   const ringState: VoiceCaptureRingState = speaking
     ? "active"
-    : hasCapture
+    : finished
       ? "complete"
       : "idle";
+
+  const finalizeCapture = useCallback(() => {
+    const interim = interimTranscript.trim();
+    const transcript = [captureRef.current.transcript, interim]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    onCaptureChange(completeNamingCapture(scoreNaming(transcript)));
+  }, [interimTranscript, onCaptureChange]);
 
   const stopSpeaking = useCallback(() => {
     recognitionRef.current?.stop();
     recognitionRef.current = null;
+    finalizeCapture();
     setInterimTranscript("");
     setPhase("idle");
-  }, []);
+  }, [finalizeCapture]);
 
   const startSpeaking = useCallback(() => {
     setErrorMessage(null);
     setInterimTranscript("");
+    onCaptureChange({ ...captureRef.current, completedAt: null });
 
     if (!speechAvailable) {
       setPhase("error");
-      setErrorMessage(
-        Platform.OS === "web"
-          ? "Speech recognition is not available in this browser. Try Chrome or Edge."
-          : "Live speech naming is web-first for now. Open MoCA in Chrome on your phone or desktop to test.",
-      );
+      setErrorMessage(getMocaSpeechUnavailableMessage());
       return;
     }
 
@@ -104,7 +103,7 @@ export function MocaNamingTask({ capture, onCaptureChange }: MocaNamingTaskProps
 
     if (!recognition) {
       setPhase("error");
-      setErrorMessage("Could not start speech recognition.");
+      setErrorMessage(getMocaSpeechUnavailableMessage());
       return;
     }
 
@@ -112,12 +111,6 @@ export function MocaNamingTask({ capture, onCaptureChange }: MocaNamingTaskProps
     setPhase("speaking");
     recognition.start();
   }, [onCaptureChange, speechAvailable]);
-
-  function redoCapture() {
-    stopSpeaking();
-    setErrorMessage(null);
-    onCaptureChange(scoreNaming(""));
-  }
 
   useEffect(() => {
     return () => {
@@ -143,50 +136,36 @@ export function MocaNamingTask({ capture, onCaptureChange }: MocaNamingTaskProps
         />
       </MocaTaskFrame>
 
-      <MocaTaskCaption>Your response</MocaTaskCaption>
-
       <View style={styles.responseBlock}>
-        <VoiceCaptureRing
-          activeLabel="Speaking"
-          completeLabel="Captured"
-          idleLabel="Ready when you are"
-          progress={ringState === "idle" ? 0 : 1}
-          state={ringState}
-        />
+        <Pressable
+          accessibilityHint="Starts speech capture for animal naming"
+          accessibilityRole="button"
+          disabled={speaking || finished}
+          onPress={startSpeaking}
+          style={({ pressed }) => [
+            styles.ringPressable,
+            pressed && !speaking && !finished && styles.ringPressed,
+          ]}
+        >
+          <VoiceCaptureRing
+            activeLabel="Listening"
+            completeLabel="Done"
+            idleLabel={speechAvailable ? "Tap to speak" : "Speech unavailable"}
+            progress={ringState === "idle" ? 0 : 1}
+            state={ringState}
+          />
+        </Pressable>
 
         <View style={styles.controls}>
           {speaking ? (
             <MocaVoiceMicButton label="Stop" variant="stop" onPress={stopSpeaking} />
-          ) : (
-            <MocaVoiceMicButton
-              disabled={!speechAvailable}
-              label={hasCapture ? "Speak again" : "Start speaking"}
-              variant={hasCapture ? "outline" : "primary"}
-              onPress={startSpeaking}
-            />
+          ) : finished ? null : (
+            <MocaVoiceMicButton label="Start speaking" variant="primary" onPress={startSpeaking} />
           )}
         </View>
 
-        {displayTranscript ? (
-          <MocaVoiceStatus
-            body={displayTranscript}
-            footer={
-              capture.detectedAnimals.length > 0
-                ? `Detected: ${capture.detectedAnimals.join(", ")}`
-                : undefined
-            }
-            label={hasCapture ? "Your response" : "Live transcript"}
-          />
-        ) : null}
-
         {errorMessage ? <MocaInlineAlert message={errorMessage} /> : null}
       </View>
-
-      {hasCapture && !speaking ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={redoCapture} />
-        </MocaTaskFooter>
-      ) : null}
     </MocaSectionRoot>
   );
 }
@@ -200,6 +179,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     width: "100%",
+  },
+  ringPressable: {
+    alignItems: "center",
+    borderRadius: radius.lg,
+  },
+  ringPressed: {
+    opacity: 0.92,
   },
   controls: {
     alignItems: "center",

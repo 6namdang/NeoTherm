@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 import {
   MOCA_FORM,
-  MOCA_MAX_AUTOMATED_SCORE,
   MOCA_SECTIONS,
   type MocaAbstractionCapture,
   type MocaDigitSpanCapture,
@@ -32,8 +31,9 @@ import type { MocaNamingCapture } from "../../../lib/moca-speech-recognition";
 import { emptySerial7Capture } from "../../../lib/moca-serial7-scoring";
 import { emptyVerbalFluencyCapture } from "../../../lib/moca-verbal-fluency-scoring";
 import { emptyVigilanceCapture } from "../../../lib/moca-vigilance-scoring";
-import { MocaSubmitValidationError, validateMocaRunnerState } from "../../../lib/validate-moca-submit-payload";
+import { MocaSubmitValidationError, isMocaRunnerSubmitReady, validateMocaRunnerState } from "../../../lib/validate-moca-submit-payload";
 import { colors } from "../../../theme/colors";
+import { fontFamily } from "../../../theme/fontFamily";
 import { spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 import { Button } from "../../Button";
@@ -57,15 +57,32 @@ const Q_ENTERING = FadeIn.duration(320)
   .damping(26)
   .stiffness(220)
   .mass(0.85);
-const Q_EXITING = FadeOut.duration(220);
 
 const LAST_SECTION_INDEX = MOCA_SECTIONS.length - 1;
 
 export type MocaFormRunnerProps = {
-  eyebrow?: string;
   onSubmitted?: () => void | Promise<void>;
   submitErrorMessage?: string;
+  /** Disable parent Screen scroll while the user draws on cube/clock canvas. */
+  onParentScrollEnabledChange?: (enabled: boolean) => void;
 };
+
+function sectionGateHint(sectionId: MocaSectionId): string {
+  switch (sectionId) {
+    case "naming":
+      return "Tap Stop when you are finished naming the animals.";
+    case "digit_span_forward":
+    case "digit_span_backward":
+      return "Tap Stop when you are finished repeating the numbers.";
+    case "trail":
+      return "Complete the full tap sequence to enable Continue.";
+    case "cube":
+    case "clock":
+      return "Draw in the box above to enable Continue.";
+    default:
+      return "Complete this section to enable Continue.";
+  }
+}
 
 function emptyMemoryCapture(): MocaMemoryCapture {
   return {
@@ -77,13 +94,20 @@ function emptyMemoryCapture(): MocaMemoryCapture {
 }
 
 export function MocaFormRunner({
-  eyebrow = "Care programs",
   onSubmitted,
   submitErrorMessage = "Your MoCA responses were not saved. Check your connection or sign in again.",
+  onParentScrollEnabledChange,
 }: MocaFormRunnerProps) {
   const [sectionIndex, setSectionIndex] = useState(0);
   const [maxSectionReached, setMaxSectionReached] = useState(0);
   const [busy, setBusy] = useState(false);
+
+  const handleDrawingActiveChange = useCallback(
+    (active: boolean) => {
+      onParentScrollEnabledChange?.(!active);
+    },
+    [onParentScrollEnabledChange],
+  );
 
   const [trailSequence, setTrailSequence] = useState<MocaTrailTapSequence>([]);
   const [cubeStrokes, setCubeStrokes] = useState<MocaDrawingStroke[]>([]);
@@ -109,6 +133,10 @@ export function MocaFormRunner({
 
   const section = MOCA_SECTIONS[sectionIndex]!;
   const sectionId: MocaSectionId = section.id;
+
+  useEffect(() => {
+    onParentScrollEnabledChange?.(true);
+  }, [sectionId, onParentScrollEnabledChange]);
 
   const captures: MocaRunnerCaptures = useMemo(
     () => ({
@@ -142,16 +170,7 @@ export function MocaFormRunner({
   const runnerState = useMemo(() => toMocaRunnerState(captures), [captures]);
   const canContinue = isMocaSectionComplete(sectionId, captures);
   const isLastSection = sectionIndex === LAST_SECTION_INDEX;
-  const readyToSubmit = isLastSection && canContinue;
-
-  const previewScore = useMemo(() => {
-    try {
-      validateMocaRunnerState(runnerState);
-      return buildMocaSubmitPayload(runnerState, { clientPlatform: Platform.OS }).total_score;
-    } catch {
-      return null;
-    }
-  }, [runnerState]);
+  const readyToSubmit = isLastSection && isMocaRunnerSubmitReady(runnerState);
 
   const goNext = useCallback(() => {
     if (!canContinue || isLastSection) return;
@@ -173,7 +192,6 @@ export function MocaFormRunner({
         form_id: MOCA_FORM.id,
         answers: payload as unknown as Record<string, unknown>,
       });
-      await onSubmitted?.();
     } catch (caught) {
       const body =
         caught instanceof MocaSubmitValidationError
@@ -182,8 +200,18 @@ export function MocaFormRunner({
             ? caught.message.trim()
             : submitErrorMessage;
       Alert.alert("Unable to submit MoCA", body);
+      return;
     } finally {
       setBusy(false);
+    }
+
+    try {
+      await onSubmitted?.();
+    } catch {
+      Alert.alert(
+        "MoCA saved",
+        "Your responses were saved, but the app could not navigate away. Use the back button to continue.",
+      );
     }
   }, [busy, onSubmitted, readyToSubmit, runnerState, submitErrorMessage]);
 
@@ -194,9 +222,21 @@ export function MocaFormRunner({
           <MocaTrailMakingTask sequence={trailSequence} onSequenceChange={setTrailSequence} />
         );
       case "cube":
-        return <MocaCubeCopyTask strokes={cubeStrokes} onStrokesChange={setCubeStrokes} />;
+        return (
+          <MocaCubeCopyTask
+            onDrawingActiveChange={handleDrawingActiveChange}
+            onStrokesChange={setCubeStrokes}
+            strokes={cubeStrokes}
+          />
+        );
       case "clock":
-        return <MocaClockDrawTask strokes={clockStrokes} onStrokesChange={setClockStrokes} />;
+        return (
+          <MocaClockDrawTask
+            onDrawingActiveChange={handleDrawingActiveChange}
+            onStrokesChange={setClockStrokes}
+            strokes={clockStrokes}
+          />
+        );
       case "naming":
         return <MocaNamingTask capture={namingCapture} onCaptureChange={setNamingCapture} />;
       case "memory":
@@ -252,38 +292,35 @@ export function MocaFormRunner({
 
   return (
     <View style={styles.body}>
-      <Text style={[styles.instrumentTitle, typography.title]}>{MOCA_FORM.name}</Text>
-      {MOCA_FORM.description ? (
-        <Text style={[styles.instrumentSubtitle, typography.body]}>{MOCA_FORM.description}</Text>
-      ) : null}
-      <Text style={[styles.eyebrow, typography.eyebrow]}>{eyebrow}</Text>
       <FormProgress answered={maxSectionReached} total={MOCA_SECTIONS.length} />
-      <Animated.View
-        key={sectionId}
-        entering={Q_ENTERING}
-        exiting={Q_EXITING}
-        style={styles.questionTransition}
-      >
+      <Animated.View key={sectionId} entering={Q_ENTERING} style={styles.questionTransition}>
         {renderSection(sectionId)}
       </Animated.View>
+      {!canContinue && !readyToSubmit ? (
+        <Text style={[styles.sectionGateHint, typography.caption]}>{sectionGateHint(sectionId)}</Text>
+      ) : null}
       {readyToSubmit ? (
         <View style={styles.submitPanel}>
-          <Text style={[styles.submitHint, typography.body]}>
-            You have completed every MoCA section. Tap submit once to save your responses to your
-            care record.
-            {previewScore !== null
-              ? ` Automated score snapshot: ${previewScore} / ${MOCA_MAX_AUTOMATED_SCORE}.`
-              : ""}
-            {Platform.OS === "ios"
-              ? " Cube and clock drawings are saved for clinician review."
-              : ""}
-          </Text>
-          <Button
-            disabled={busy}
-            style={styles.submitButton}
-            title={busy ? "Submitting…" : "Submit MoCA"}
-            onPress={() => void runSubmit()}
-          />
+          {busy ? (
+            <View style={styles.submittingCard}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={styles.submittingTitle}>Saving your responses…</Text>
+              <Text style={styles.submittingCaption}>
+                This may take a moment. Please don't close the app.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.submitHint, typography.body]}>
+                You have completed every MoCA section. Tap submit to save.
+              </Text>
+              <Button
+                style={styles.submitButton}
+                title="Submit MoCA"
+                onPress={() => void runSubmit()}
+              />
+            </>
+          )}
         </View>
       ) : null}
       {!readyToSubmit ? (
@@ -294,19 +331,13 @@ export function MocaFormRunner({
           onPress={goNext}
         />
       ) : null}
-      {sectionIndex > 0 ? (
+      {sectionIndex > 0 && !busy ? (
         <Button
-          disabled={busy}
           style={styles.backButton}
           title="Previous question"
           variant="ghost"
           onPress={goPrev}
         />
-      ) : null}
-      {busy ? (
-        <View style={styles.inlineBusy}>
-          <ActivityIndicator accessibilityLabel="Submitting MoCA responses" />
-        </View>
       ) : null}
     </View>
   );
@@ -317,21 +348,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     marginTop: spacing.sm,
   },
-  instrumentTitle: {
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  instrumentSubtitle: {
-    color: colors.textSecondary,
-    lineHeight: 24,
-    marginBottom: spacing.sm,
-  },
-  eyebrow: {
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-  },
   questionTransition: {
     overflow: "hidden",
+  },
+  sectionGateHint: {
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: "center",
   },
   continueButton: {
     alignSelf: "stretch",
@@ -354,7 +377,25 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     width: "100%",
   },
-  inlineBusy: {
-    marginTop: spacing.lg,
+  submittingCard: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 16,
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
+  },
+  submittingTitle: {
+    color: colors.text,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 18,
+    marginTop: spacing.sm,
+    textAlign: "center",
+  },
+  submittingCaption: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
   },
 });

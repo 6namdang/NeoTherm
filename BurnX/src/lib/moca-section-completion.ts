@@ -42,7 +42,7 @@ export function isMocaSectionComplete(
     case "clock":
       return captures.clockStrokes.length > 0;
     case "naming":
-      return captures.namingCapture.detectedAnimals.length >= 3;
+      return captures.namingCapture.completedAt !== null;
     case "memory":
       return captures.memoryCapture.recallAvailableAt !== null;
     case "digit_span_forward":

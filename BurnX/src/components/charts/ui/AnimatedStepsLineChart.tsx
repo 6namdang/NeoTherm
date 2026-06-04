@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -18,7 +18,8 @@ import Svg, {
 
 import type { AppleHealthStepsHistoryPoint } from "../../../lib/healthkit";
 import { colors } from "../../../theme/colors";
-import { spacing } from "../../../theme/spacing";
+import { fontFamily } from "../../../theme/fontFamily";
+import { radius, spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 import { average, buildLinePath } from "./chart-geometry";
 
@@ -34,7 +35,14 @@ function formatInteger(value: number): string {
   return new Intl.NumberFormat().format(value);
 }
 
+type SelectedPoint = {
+  index: number;
+  value: number;
+  label: string;
+} | null;
+
 export function AnimatedStepsLineChart({ history }: AnimatedStepsLineChartProps) {
+  const [selected, setSelected] = useState<SelectedPoint>(null);
   const values = useMemo(() => history.map((point) => point.steps), [history]);
   const avg = average(values);
   const maxValue = Math.max(avg, ...values, 1);
@@ -61,6 +69,16 @@ export function AnimatedStepsLineChart({ history }: AnimatedStepsLineChartProps)
     strokeDashoffset: pathLength * (1 - progress.value),
   }));
 
+  const handlePointPress = (index: number) => {
+    const point = history[index];
+    if (!point) return;
+    if (selected?.index === index) {
+      setSelected(null);
+    } else {
+      setSelected({ index, value: point.steps, label: point.label });
+    }
+  };
+
   if (history.length === 0) {
     return (
       <Text style={[styles.empty, typography.body]}>
@@ -69,8 +87,20 @@ export function AnimatedStepsLineChart({ history }: AnimatedStepsLineChartProps)
     );
   }
 
+  const innerW = CHART_W - 28;
+  const hitAreaWidth = history.length > 1 ? innerW / history.length : innerW;
+
   return (
     <View style={styles.wrap}>
+      {selected ? (
+        <View style={styles.tooltip}>
+          <Text style={styles.tooltipValue}>{formatInteger(selected.value)}</Text>
+          <Text style={styles.tooltipLabel}>steps on {selected.label}</Text>
+        </View>
+      ) : (
+        <View style={styles.tooltipPlaceholder} />
+      )}
+
       <View style={styles.chartCard}>
         <Svg height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`} width="100%">
           <Defs>
@@ -126,21 +156,46 @@ export function AnimatedStepsLineChart({ history }: AnimatedStepsLineChartProps)
             <Circle
               cx={point.x}
               cy={point.y}
-              fill={colors.surface}
+              fill={selected?.index === index ? colors.systemGreen : colors.surface}
               key={`${history[index]?.date ?? index}`}
-              r={5}
+              r={selected?.index === index ? 7 : 5}
               stroke={colors.systemGreen}
               strokeWidth={2.5}
             />
           ))}
         </Svg>
+
+        <View style={styles.hitAreas}>
+          {points.map((point, index) => (
+            <Pressable
+              key={`hit-${history[index]?.date ?? index}`}
+              onPress={() => handlePointPress(index)}
+              style={[
+                styles.hitArea,
+                { left: 14 + index * hitAreaWidth, width: hitAreaWidth },
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       <View style={styles.axis}>
-        {history.map((point) => (
-          <Text key={point.date} style={[styles.axisLabel, typography.caption]}>
-            {point.label}
-          </Text>
+        {history.map((point, index) => (
+          <Pressable
+            key={point.date}
+            onPress={() => handlePointPress(index)}
+            style={styles.axisItem}
+          >
+            <Text
+              style={[
+                styles.axisLabel,
+                typography.caption,
+                selected?.index === index && styles.axisLabelSelected,
+              ]}
+            >
+              {point.label}
+            </Text>
+          </Pressable>
         ))}
       </View>
 
@@ -158,11 +213,41 @@ const styles = StyleSheet.create({
   wrap: {
     gap: spacing.sm,
   },
+  tooltip: {
+    alignItems: "center",
+    backgroundColor: colors.systemGreen,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    alignSelf: "center",
+  },
+  tooltipValue: {
+    color: colors.textOnPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 18,
+  },
+  tooltipLabel: {
+    color: colors.textOnPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    opacity: 0.9,
+  },
+  tooltipPlaceholder: {
+    height: 44,
+  },
   chartCard: {
     borderRadius: 20,
     backgroundColor: colors.systemGray6,
     paddingVertical: spacing.sm,
     overflow: "hidden",
+  },
+  hitAreas: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+  },
+  hitArea: {
+    height: "100%",
+    position: "absolute",
   },
   empty: {
     color: colors.textSecondary,
@@ -172,10 +257,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.xs,
   },
+  axisItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
   axisLabel: {
     color: colors.textMuted,
-    flex: 1,
     textAlign: "center",
+  },
+  axisLabelSelected: {
+    color: colors.systemGreen,
+    fontFamily: fontFamily.semiBold,
   },
   avgRow: {
     flexDirection: "row",

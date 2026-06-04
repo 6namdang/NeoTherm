@@ -19,9 +19,14 @@ export type MocaClockDrawing = {
 type MocaClockDrawTaskProps = {
   strokes: MocaDrawingStroke[];
   onStrokesChange: (strokes: MocaDrawingStroke[]) => void;
+  onDrawingActiveChange?: (active: boolean) => void;
 };
 
-export function MocaClockDrawTask({ strokes, onStrokesChange }: MocaClockDrawTaskProps) {
+export function MocaClockDrawTask({
+  strokes,
+  onStrokesChange,
+  onDrawingActiveChange,
+}: MocaClockDrawTaskProps) {
   function clearDrawing() {
     onStrokesChange([]);
   }
@@ -38,7 +43,11 @@ export function MocaClockDrawTask({ strokes, onStrokesChange }: MocaClockDrawTas
       </Text>
 
       <Text style={[styles.drawLabel, typography.caption]}>Your drawing</Text>
-      <MocaDrawingCanvas strokes={strokes} onStrokesChange={onStrokesChange} />
+      <MocaDrawingCanvas
+        onDrawingActiveChange={onDrawingActiveChange}
+        onStrokesChange={onStrokesChange}
+        strokes={strokes}
+      />
 
       <Pressable accessibilityRole="button" onPress={clearDrawing} style={styles.clearLink}>
         <Text style={[styles.clearText, typography.caption]}>Clear drawing</Text>

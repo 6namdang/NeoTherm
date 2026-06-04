@@ -74,14 +74,6 @@ export async function resolveVoiceAssignmentPending(
   return !submissionInWindow(last, window.startMs, window.endMs);
 }
 
-/** @deprecated Use {@link resolveVoiceAssignmentPending}. */
-export async function resolveVoiceWeeklyAssignmentPending(
-  _slots: unknown,
-  nowMs: number,
-): Promise<boolean> {
-  return resolveVoiceAssignmentPending(nowMs);
-}
-
 /** Call after **`POST /voice/sessions`** succeeds so the Voice tab updates immediately. */
 export async function persistVoiceCheckinSubmissionClientTime(): Promise<void> {
   const sub = await getSubjectFromStoredIdToken();

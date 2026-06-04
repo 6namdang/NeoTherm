@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
-import {
-  MOCA_MEMORY_WORDS,
-  type MocaMemoryCapture,
-} from "../../../constants/forms/moca";
-import {
-  delayedRecallChecklist,
-  scoreDelayedRecallResponse,
-} from "../../../lib/moca-memory-scoring";
+import { type MocaMemoryCapture } from "../../../constants/forms/moca";
+import { scoreDelayedRecallResponse } from "../../../lib/moca-memory-scoring";
 import { colors } from "../../../theme/colors";
 import { fontFamily } from "../../../theme/fontFamily";
 import { radius, spacing } from "../../../theme/spacing";
@@ -19,11 +13,8 @@ import {
   MocaMemoryDelayRow,
   MocaSectionHeader,
   MocaSectionRoot,
-  MocaTaskFooter,
   MocaTaskFrame,
-  MocaTaskLink,
   MocaTaskPrompt,
-  MocaVoiceStatus,
 } from "./MocaSectionChrome";
 
 type MocaDelayedRecallTaskProps = {
@@ -36,10 +27,6 @@ function formatCountdown(remainMs: number): string {
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
   return `${min}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatWord(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 export function MocaDelayedRecallTask({
@@ -73,11 +60,6 @@ export function MocaDelayedRecallTask({
     setSubmitted(false);
   }, [memoryCapture.delayedRecall.transcript]);
 
-  const checklist = submitted
-    ? delayedRecallChecklist(memoryCapture.delayedRecall.transcript)
-    : [];
-  const score = memoryCapture.delayedRecall.detectedWords.length;
-
   const submitResponse = useCallback(() => {
     const delayedRecall = scoreDelayedRecallResponse(draftResponse);
     onMemoryCaptureChange({
@@ -86,15 +68,6 @@ export function MocaDelayedRecallTask({
     });
     setSubmitted(true);
   }, [draftResponse, memoryCapture, onMemoryCaptureChange]);
-
-  const resetTask = useCallback(() => {
-    setDraftResponse("");
-    setSubmitted(false);
-    onMemoryCaptureChange({
-      ...memoryCapture,
-      delayedRecall: { transcript: "", detectedWords: [] },
-    });
-  }, [memoryCapture, onMemoryCaptureChange]);
 
   const canSubmit = recallReady && !submitted && draftResponse.trim().length > 0;
 
@@ -115,11 +88,10 @@ export function MocaDelayedRecallTask({
         <MocaMemoryDelayRow countdown={formatCountdown(recallRemainMs)} />
       ) : null}
 
-      {recallReady ? (
+      {recallReady && !submitted ? (
         <MocaTaskFrame style={styles.formFrame}>
           <Text style={[typography.caption, styles.fieldLabel]}>Your answer</Text>
           <TextInput
-            editable={!submitted}
             multiline
             onChangeText={setDraftResponse}
             placeholder="Type as many words as you remember"
@@ -135,35 +107,6 @@ export function MocaDelayedRecallTask({
         <View style={styles.actionBar}>
           <MocaCompactButton disabled={!canSubmit} title="Submit answer" onPress={submitResponse} />
         </View>
-      ) : null}
-
-      {submitted ? (
-        <View style={styles.summaryStack}>
-          <MocaVoiceStatus
-            body={memoryCapture.delayedRecall.transcript || "—"}
-            footer={`MoCA score: ${score} / ${MOCA_MEMORY_WORDS.length} points`}
-            label="Your response"
-          />
-          <View style={styles.checklist}>
-            {checklist.map(({ word, recalled }) => (
-              <View key={word} style={styles.checklistRow}>
-                <Text style={[styles.checkMark, recalled ? styles.checkMarkOn : null]}>
-                  {recalled ? "✓" : "—"}
-                </Text>
-                <Text style={[typography.body, styles.checklistWord]}>{formatWord(word)}</Text>
-              </View>
-            ))}
-          </View>
-          <MocaInlineNote>
-            One point per word correctly recalled spontaneously without cues.
-          </MocaInlineNote>
-        </View>
-      ) : null}
-
-      {submitted ? (
-        <MocaTaskFooter>
-          <MocaTaskLink label="Start over" onPress={resetTask} />
-        </MocaTaskFooter>
       ) : null}
     </MocaSectionRoot>
   );
@@ -192,32 +135,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: spacing.sm,
     width: "100%",
-  },
-  summaryStack: {
-    gap: spacing.md,
-    width: "100%",
-  },
-  checklist: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.sm,
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  checklistRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  checkMark: {
-    color: colors.textMuted,
-    fontFamily: fontFamily.bold,
-    fontSize: 18,
-    width: 20,
-  },
-  checkMarkOn: {
-    color: colors.success,
-  },
-  checklistWord: {
-    color: colors.text,
   },
 });

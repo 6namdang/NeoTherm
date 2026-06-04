@@ -2,13 +2,17 @@ import { getSubjectFromStoredIdToken } from "./jwt";
 
 const DEFAULT_VOICE_ANALYSIS_LIMIT = 7;
 
+const DEFAULT_VOICE_ANALYSIS_BASE = "https://burnx-voice-analysis.onrender.com";
+
 const voiceAnalysisUrlFromEnv =
   typeof process !== "undefined" &&
   typeof process.env?.EXPO_PUBLIC_VOICE_ANALYSIS_URL === "string"
     ? process.env.EXPO_PUBLIC_VOICE_ANALYSIS_URL.trim()
     : "";
 
-export const VOICE_ANALYSIS_BASE_URL = voiceAnalysisUrlFromEnv.replace(/\/$/, "");
+export const VOICE_ANALYSIS_BASE_URL = (
+  voiceAnalysisUrlFromEnv.length > 0 ? voiceAnalysisUrlFromEnv : DEFAULT_VOICE_ANALYSIS_BASE
+).replace(/\/$/, "");
 
 export type VoiceAnalysisMetrics = {
   voice_stability: number | null;

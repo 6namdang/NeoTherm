@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -11,7 +11,8 @@ import Svg, { Line, Rect } from "react-native-svg";
 
 import type { AppleHealthFlightsHistoryPoint } from "../../../lib/healthkit";
 import { colors } from "../../../theme/colors";
-import { spacing } from "../../../theme/spacing";
+import { fontFamily } from "../../../theme/fontFamily";
+import { radius, spacing } from "../../../theme/spacing";
 import { typography } from "../../../theme/typography";
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
@@ -23,6 +24,12 @@ const PAD = { top: 14, bottom: 8, left: 14, right: 14 };
 type AnimatedFlightsBarChartProps = {
   history: AppleHealthFlightsHistoryPoint[];
 };
+
+type SelectedBar = {
+  index: number;
+  value: number;
+  label: string;
+} | null;
 
 function formatInteger(value: number): string {
   return new Intl.NumberFormat().format(value);
@@ -41,12 +48,14 @@ function FlightsBarColumn({
   chartBottom,
   barHeight,
   delayMs,
+  isSelected,
 }: {
   x: number;
   barWidth: number;
   chartBottom: number;
   barHeight: number;
   delayMs: number;
+  isSelected: boolean;
 }) {
   const progress = useSharedValue(0);
 
@@ -66,7 +75,8 @@ function FlightsBarColumn({
   return (
     <AnimatedRect
       animatedProps={barProps}
-      fill={colors.systemOrange}
+      fill={isSelected ? "#FF9500" : colors.systemOrange}
+      opacity={isSelected ? 1 : 0.85}
       rx={6}
       ry={6}
       width={barWidth}
@@ -76,6 +86,7 @@ function FlightsBarColumn({
 }
 
 export function AnimatedFlightsBarChart({ history }: AnimatedFlightsBarChartProps) {
+  const [selected, setSelected] = useState<SelectedBar>(null);
   const avg = average(history);
   const values = useMemo(() => history.map((point) => point.flights), [history]);
   const maxValue = Math.max(avg, ...values, 1);
@@ -89,6 +100,16 @@ export function AnimatedFlightsBarChart({ history }: AnimatedFlightsBarChartProp
     history.length > 0 ? (innerW - gap * (history.length - 1)) / history.length : 12,
   );
 
+  const handleBarPress = (index: number) => {
+    const point = history[index];
+    if (!point) return;
+    if (selected?.index === index) {
+      setSelected(null);
+    } else {
+      setSelected({ index, value: point.flights, label: point.label });
+    }
+  };
+
   if (history.length === 0) {
     return (
       <Text style={[styles.empty, typography.body]}>
@@ -97,8 +118,19 @@ export function AnimatedFlightsBarChart({ history }: AnimatedFlightsBarChartProp
     );
   }
 
+  const hitAreaWidth = history.length > 0 ? innerW / history.length : innerW;
+
   return (
     <View style={styles.wrap}>
+      {selected ? (
+        <View style={styles.tooltip}>
+          <Text style={styles.tooltipValue}>{formatInteger(selected.value)}</Text>
+          <Text style={styles.tooltipLabel}>flights on {selected.label}</Text>
+        </View>
+      ) : (
+        <View style={styles.tooltipPlaceholder} />
+      )}
+
       <View style={styles.chartCard}>
         <Svg height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`} width="100%">
           {[0, 1, 2].map((line) => {
@@ -135,19 +167,45 @@ export function AnimatedFlightsBarChart({ history }: AnimatedFlightsBarChartProp
                 barWidth={barWidth}
                 chartBottom={chartBottom}
                 delayMs={index * 70}
+                isSelected={selected?.index === index}
                 key={point.date}
                 x={x}
               />
             );
           })}
         </Svg>
+
+        <View style={styles.hitAreas}>
+          {history.map((point, index) => (
+            <Pressable
+              key={`hit-${point.date}`}
+              onPress={() => handleBarPress(index)}
+              style={[
+                styles.hitArea,
+                { left: PAD.left + index * hitAreaWidth, width: hitAreaWidth },
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       <View style={styles.axis}>
-        {history.map((point) => (
-          <Text key={point.date} style={[styles.axisLabel, typography.caption]}>
-            {point.label}
-          </Text>
+        {history.map((point, index) => (
+          <Pressable
+            key={point.date}
+            onPress={() => handleBarPress(index)}
+            style={styles.axisItem}
+          >
+            <Text
+              style={[
+                styles.axisLabel,
+                typography.caption,
+                selected?.index === index && styles.axisLabelSelected,
+              ]}
+            >
+              {point.label}
+            </Text>
+          </Pressable>
         ))}
       </View>
 
@@ -165,11 +223,41 @@ const styles = StyleSheet.create({
   wrap: {
     gap: spacing.sm,
   },
+  tooltip: {
+    alignItems: "center",
+    backgroundColor: colors.systemOrange,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    alignSelf: "center",
+  },
+  tooltipValue: {
+    color: colors.textOnPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 18,
+  },
+  tooltipLabel: {
+    color: colors.textOnPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    opacity: 0.9,
+  },
+  tooltipPlaceholder: {
+    height: 44,
+  },
   chartCard: {
     borderRadius: 20,
     backgroundColor: colors.systemGray6,
     paddingVertical: spacing.sm,
     overflow: "hidden",
+  },
+  hitAreas: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+  },
+  hitArea: {
+    height: "100%",
+    position: "absolute",
   },
   empty: {
     color: colors.textSecondary,
@@ -179,10 +267,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.xs,
   },
+  axisItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
   axisLabel: {
     color: colors.textMuted,
-    flex: 1,
     textAlign: "center",
+  },
+  axisLabelSelected: {
+    color: colors.systemOrange,
+    fontFamily: fontFamily.semiBold,
   },
   avgRow: {
     flexDirection: "row",

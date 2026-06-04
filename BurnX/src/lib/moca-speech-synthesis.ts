@@ -164,16 +164,6 @@ export function runMemoryRecallScript(handlers: MocaSpeechHandlers = {}): void {
   );
 }
 
-/** @deprecated Use runMemoryTrial1Script / runMemoryTrial2Script */
-export function speakMocaMemoryWordList(handlers: MocaSpeechHandlers = {}): void {
-  runMemoryTrial1Script(handlers);
-}
-
-/** @deprecated Use runMemoryRecallScript */
-export function speakMocaDelayedRecallPrompt(handlers: MocaSpeechHandlers = {}): void {
-  runMemoryRecallScript(handlers);
-}
-
 /** First MoCA sentence repetition trial. */
 export function runLanguageSentence1Script(handlers: MocaSpeechHandlers = {}): void {
   void runScript(
@@ -243,7 +233,7 @@ function vigilanceLetterSpoken(letter: string): string {
 const MOCA_VIGILANCE_INSTRUCTIONS =
   "I am going to read a sequence of letters. Every time you hear a, please tap in the box. If you hear a different letter, do not tap in the box.";
 
-/** Vigilance task: instructions, then one letter per second with slot callbacks. */
+/** Vigilance task: spoken instructions, one "Get ready", then letters at a fixed interval. */
 export function runVigilanceScript(handlers: MocaVigilanceSpeechHandlers = {}): void {
   void runVigilanceSequence(handlers);
 }
@@ -261,15 +251,15 @@ async function runVigilanceSequence(handlers: MocaVigilanceSpeechHandlers): Prom
     await delay(600, gen);
     if (gen !== activeScriptGen) return;
 
+    handlers.onCue?.("Get ready…");
+    await speakOnce("Get ready.", 0.85);
+    if (gen !== activeScriptGen) return;
+
     for (let index = 0; index < MOCA_VIGILANCE_LETTERS.length; index += 1) {
       if (gen !== activeScriptGen) return;
 
       const letter = MOCA_VIGILANCE_LETTERS[index]!;
       const spoken = vigilanceLetterSpoken(letter);
-
-      handlers.onCue?.("Get ready…");
-      await speakOnce("Get ready.", 0.85);
-      if (gen !== activeScriptGen) return;
 
       handlers.onLetterStart?.(index, letter);
 

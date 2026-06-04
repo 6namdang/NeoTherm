@@ -9,6 +9,7 @@ import {
 import { detectMemoryWords, emptyMemoryTrialCapture } from "../../../lib/moca-memory-scoring";
 import {
   createMocaSpeechRecognition,
+  getMocaSpeechUnavailableMessage,
   isMocaSpeechRecognitionAvailable,
 } from "../../../lib/moca-speech-recognition";
 import {
@@ -122,11 +123,7 @@ export function MocaMemoryTask({ capture, onCaptureChange }: MocaMemoryTaskProps
     if (!key) return;
 
     if (!speechAvailable) {
-      setErrorMessage(
-        Platform.OS === "web"
-          ? "Speech recognition is not available in this browser. Try Chrome or Edge."
-          : "Live speech capture is web-first for now. Open MoCA in Chrome to test memory recall.",
-      );
+      setErrorMessage(getMocaSpeechUnavailableMessage());
       return;
     }
 

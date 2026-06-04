@@ -1,10 +1,24 @@
 export const MOCA_FORM_ID = "moca_v1" as const;
 
+/**
+ * Flip to `true` for device testing: MoCA lists on the Weekly tab, always pending.
+ * Production: `false` — MoCA only appears inside the Long Assessment bundle (days 30/60/90).
+ */
+export const MOCA_STANDALONE_TESTING_ENABLED = false;
+
+export function isMocaStandaloneTestingEnabled(): boolean {
+  return MOCA_STANDALONE_TESTING_ENABLED;
+}
+
+/** Standalone testing route (not `/forms/moca_v1`). */
+export const MOCA_STANDALONE_ROUTE = "/forms/moca" as const;
+
 export const MOCA_FORM = {
   id: MOCA_FORM_ID,
   name: "MoCA assessment",
-  description:
-    "Montreal Cognitive Assessment — cognitive screening as part of your Long Assessment.",
+  description: isMocaStandaloneTestingEnabled()
+    ? "Full MoCA — all 13 sections, always available for device testing (temporary)."
+    : "Montreal Cognitive Assessment — cognitive screening as part of your Long Assessment.",
 } as const;
 
 /** Maximum MoCA score computed on-device (excludes cube, clock, orientation, education bonus). */

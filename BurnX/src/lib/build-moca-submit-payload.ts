@@ -16,6 +16,38 @@ import { clampAutomatedMocaScore, computeMocaTotalScore, scoreMocaTrail } from "
 
 import type { MocaRunnerState } from "./moca-runner-state";
 
+const MAX_POINTS_PER_STROKE = 80;
+
+/**
+ * Downsample a stroke to at most `maxPoints` using Ramer-Douglas-Peucker-style
+ * uniform sampling. Keeps first and last point to preserve shape boundaries.
+ */
+function downsampleStroke(stroke: MocaDrawingStroke, maxPoints: number): MocaDrawingStroke {
+  const { points } = stroke;
+  if (points.length <= maxPoints) return stroke;
+  const sampled: Array<{ x: number; y: number }> = [];
+  const step = (points.length - 1) / (maxPoints - 1);
+  for (let i = 0; i < maxPoints - 1; i++) {
+    sampled.push(points[Math.round(i * step)]!);
+  }
+  sampled.push(points[points.length - 1]!);
+  return { points: sampled };
+}
+
+function compactStrokes(strokes: MocaDrawingStroke[]): MocaDrawingStroke[] {
+  return strokes.map((s) => downsampleStroke(s, MAX_POINTS_PER_STROKE));
+}
+
+/** Round normalized coordinates to 4 decimal places to save bytes. */
+function roundStrokeCoords(strokes: MocaDrawingStroke[]): MocaDrawingStroke[] {
+  return strokes.map((s) => ({
+    points: s.points.map((p) => ({
+      x: Math.round(p.x * 10000) / 10000,
+      y: Math.round(p.y * 10000) / 10000,
+    })),
+  }));
+}
+
 export type MocaSubmitPayload = {
   client_platform: string;
   submitted_at_client_ms: number;
@@ -56,10 +88,10 @@ export function buildMocaSubmitPayload(
     client_platform: options.clientPlatform ?? "unknown",
     submitted_at_client_ms: options.submittedAtClientMs ?? Date.now(),
     visuospatial_trail: trail,
-    visuospatial_cube: { strokes: state.cubeStrokes },
+    visuospatial_cube: { strokes: roundStrokeCoords(compactStrokes(state.cubeStrokes)) },
     visuospatial_clock: {
       prompt: MOCA_CLOCK_TIME_PROMPT,
-      strokes: state.clockStrokes,
+      strokes: roundStrokeCoords(compactStrokes(state.clockStrokes)),
     },
     naming: state.namingCapture,
     memory: {

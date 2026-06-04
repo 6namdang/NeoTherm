@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 
 import { API_BASE_URL } from "../../aws-config";
 import { getValidIdToken, refreshSession } from "./auth";
+import { invalidateCacheForForm } from "./dashboard-cache";
 import { bxLog } from "./debug-log";
 import type { FormScheduleResponse } from "./ema-schedule-types";
 
@@ -329,24 +330,85 @@ export async function deleteMe(): Promise<void> {
   bxLog("api", "deleteMe → ok");
 }
 
+const SUBMIT_RESPONSE_BODY_TIMEOUT_MS = 15_000;
+
+/** MoCA and other large payloads can produce huge echoed bodies; never block the UI on parsing them. */
+async function readSubmitResponseBody(response: Response): Promise<unknown> {
+  const readBody = async (): Promise<unknown> => {
+    const text = await response.text();
+    if (text.trim() === "") return {};
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return {};
+    }
+  };
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readBody(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("submit response body timeout")),
+          SUBMIT_RESPONSE_BODY_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (caught) {
+    bxLog("api", "submitFormResponse body read skipped", {
+      reason: caught instanceof Error ? caught.message : String(caught),
+    });
+    return {};
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
+const SUBMIT_TIMEOUT_MS = 20_000;
+
 export async function submitFormResponse(payload: FormResponsePayload): Promise<unknown> {
   bxLog("api", "submitFormResponse()", {
     form_id: payload.form_id,
     answerKeys: Object.keys(payload.answers),
     answerCount: Object.keys(payload.answers).length,
   });
-  const response = await authFetch("/form-responses", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+
+  const body = JSON.stringify(payload);
+  bxLog("api", "submitFormResponse payload size", { bytes: body.length });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await authFetch("/form-responses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("The server took too long to respond. Please try again.");
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
 
-  const json = await response.json().catch(() => ({}));
+  const json = await readSubmitResponseBody(response);
   bxLog("api", "submitFormResponse → ok", json);
+
+  // Invalidate related dashboard cache so next load fetches fresh data
+  void invalidateCacheForForm(payload.form_id).catch((err) => {
+    bxLog("api", "cache invalidation failed (non-fatal)", err);
+  });
+
   return json;
 }
 

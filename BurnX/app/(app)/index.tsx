@@ -11,6 +11,11 @@ import {
     type AppStateStatus,
 } from "react-native";
 import { AccountSidePanel } from "../../src/components/AccountSidePanel";
+import {
+  getDashboardCache,
+  setDashboardCache,
+} from "../../src/lib/dashboard-cache";
+import { bxLog } from "../../src/lib/debug-log";
 import { CognitiveFunctionDashboardCard } from "../../src/components/charts/CognitiveFunctionDashboardCard";
 import { FatigueScoreCard } from "../../src/components/charts/FatigueScoreCard";
 import { Gad7DashboardCard } from "../../src/components/charts/Gad7DashboardCard";
@@ -432,13 +437,53 @@ export default function HomeScreen() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [burnDayLabel, setBurnDayLabel] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  const hydrate = useCallback(async (forceEmaRefresh = false) => {
-    const next = await fetchDashboardAws({ forceEmaRefresh });
-    return next;
-  }, []);
+  /**
+   * Fetch fresh data from AWS, cache it, then display.
+   * Falls back to cached data only if the network fetch fails.
+   */
+  const hydrateWithCache = useCallback(
+    async (options?: { forceEmaRefresh?: boolean }) => {
+      const { forceEmaRefresh = false } = options ?? {};
+
+      setFetchError(null);
+      try {
+        // Fetch fresh data from AWS
+        const fresh = await fetchDashboardAws({ forceEmaRefresh });
+        setDashboard(fresh);
+
+        // Save to cache for offline fallback (fire and forget)
+        void setDashboardCache("dashboard", fresh).catch((err) => {
+          bxLog("dashboard", "Cache write failed (non-fatal)", err);
+        });
+
+        return fresh;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load dashboard";
+        bxLog("dashboard", "Fetch failed, trying cache fallback", { error: message });
+
+        // Network failed - try to show cached data as fallback
+        try {
+          const cached = await getDashboardCache<DashboardData>("dashboard");
+          if (cached) {
+            bxLog("dashboard", "Showing cached fallback", { cachedAt: cached.cachedAt });
+            setDashboard(cached.data);
+            setFetchError(`Using cached data (${message})`);
+            return cached.data;
+          }
+        } catch (cacheErr) {
+          bxLog("dashboard", "Cache fallback also failed", cacheErr);
+        }
+
+        setFetchError(message);
+        throw err;
+      }
+    },
+    [],
+  );
 
   const hydrateBurnDay = useCallback(async () => {
     try {
@@ -453,14 +498,17 @@ export default function HomeScreen() {
     useCallback(() => {
       let cancelled = false;
       void (async () => {
-        const next = await hydrate();
-        if (!cancelled) setDashboard(next);
+        try {
+          await hydrateWithCache();
+        } catch {
+          // Error already logged and stored in fetchError state
+        }
         if (!cancelled) await hydrateBurnDay();
       })();
       return () => {
         cancelled = true;
       };
-    }, [hydrate, hydrateBurnDay]),
+    }, [hydrateWithCache, hydrateBurnDay]),
   );
 
   useEffect(() => {
@@ -473,8 +521,11 @@ export default function HomeScreen() {
         nextState === "active"
       ) {
         void (async () => {
-          const next = await hydrate();
-          if (mounted) setDashboard(next);
+          try {
+            await hydrateWithCache();
+          } catch {
+            // Error already logged and stored in fetchError state
+          }
           if (mounted) await hydrateBurnDay();
         })();
       }
@@ -483,18 +534,19 @@ export default function HomeScreen() {
       mounted = false;
       sub.remove();
     };
-  }, [hydrate, hydrateBurnDay]);
+  }, [hydrateWithCache, hydrateBurnDay]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const next = await hydrate(true);
-      setDashboard(next);
+      await hydrateWithCache({ forceEmaRefresh: true });
       await hydrateBurnDay();
+    } catch {
+      // Error already logged and stored in fetchError state
     } finally {
       setRefreshing(false);
     }
-  }, [hydrate, hydrateBurnDay]);
+  }, [hydrateWithCache, hydrateBurnDay]);
 
   const welcomeFacility = resolveWelcomeFacility(me);
   const welcomeRole = resolveWelcomeRole(me, "patient");

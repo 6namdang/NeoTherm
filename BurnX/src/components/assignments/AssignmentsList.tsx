@@ -19,7 +19,8 @@ import {
   setAssignmentsListCache,
 } from "../../lib/assignments-list-cache";
 import { loadPendingAssignments } from "../../lib/load-pending-assignments";
-import { LONG_ASSESSMENT_BUNDLE_ID } from "../../lib/care-program-form-groups";
+import { LONG_ASSESSMENT_BUNDLE_ID, mocaFormHref } from "../../lib/care-program-form-groups";
+import { MOCA_FORM_ID, isMocaStandaloneTestingEnabled } from "../../constants/forms/moca";
 import { colors } from "../../theme/colors";
 import { radius, spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
@@ -162,7 +163,9 @@ function FormRow({ form }: { form: FormDefinition }) {
   const href =
     form.id === LONG_ASSESSMENT_BUNDLE_ID
       ? ("/forms/long-assessment" as Href)
-      : (`/forms/${form.id}` as Href);
+      : isMocaStandaloneTestingEnabled() && form.id === MOCA_FORM_ID
+        ? mocaFormHref()
+        : (`/forms/${form.id}` as Href);
 
   return (
     <Pressable

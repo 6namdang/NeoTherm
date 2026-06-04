@@ -1,5 +1,6 @@
 import type { FormDefinition } from "../constants/forms";
 import { forms } from "../constants/forms";
+import { MOCA_FORM_ID, isMocaStandaloneTestingEnabled } from "../constants/forms/moca";
 import { LONG_ASSESSMENT_BUNDLE_ID } from "./care-program-form-groups";
 import { resolveAssignmentSnapshot } from "./form-assignment-eligibility";
 import { resolveLongAssessmentSnapshot } from "./long-assessment-resolve";
@@ -23,6 +24,9 @@ export async function loadPendingAssignments(
   const results = await Promise.all(
     toCheck.map(async (f) => {
       try {
+        if (isMocaStandaloneTestingEnabled() && f.id === MOCA_FORM_ID) {
+          return f;
+        }
         if (f.id === LONG_ASSESSMENT_BUNDLE_ID) {
           const snap = await resolveLongAssessmentSnapshot();
           return snap.pending ? f : null;

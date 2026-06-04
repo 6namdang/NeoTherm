@@ -544,13 +544,8 @@ export default function DoctorDashboardScreen() {
         facility={welcomeFacility}
         role={welcomeRole}
         roleLabel="Clinician account"
-        unreadCount={0}
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
-        onNotifications={() => {
-          setAccountOpen(false);
-          router.push("/notifications" as Href);
-        }}
         onSettings={() => {
           setAccountOpen(false);
           router.push("/settings" as Href);

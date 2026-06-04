@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import { deleteMe } from "./api";
 import { clearAssignmentsListCache } from "./assignments-list-cache";
 import * as auth from "./auth";
+import { clearAllDashboardCaches } from "./dashboard-cache";
 import { bxLog } from "./debug-log";
 import { clearEmaScheduleCache } from "./ema-schedule-loader";
 import { stopHomeAwayTracking } from "./home-location-tracking";
@@ -28,6 +29,7 @@ export async function deletePatientAccount(): Promise<void> {
   await clearLongAssessmentSession();
   clearEmaScheduleCache();
   clearAssignmentsListCache();
+  await clearAllDashboardCaches();
 
   if (Platform.OS !== "web") {
     try {

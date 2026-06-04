@@ -97,11 +97,3 @@ export function buildFormRecallPeriodLabel(
   if (days === 1) return "In the last day";
   return `In the last ${days} days`;
 }
-
-/** @deprecated Use `buildFormRecallPeriodLabel` */
-export function buildBurnHeader(
-  injuryDate: string | null,
-  lastCompletedAt: string | null,
-): string {
-  return buildFormRecallPeriodLabel(injuryDate, lastCompletedAt);
-}

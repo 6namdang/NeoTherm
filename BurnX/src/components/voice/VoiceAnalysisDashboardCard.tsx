@@ -14,7 +14,6 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import {
   loadVoiceAnalysisSessions,
-  VOICE_ANALYSIS_BASE_URL,
   type VoiceAnalysisSession,
 } from "../../lib/voice-analysis";
 import { colors } from "../../theme/colors";
@@ -56,15 +55,10 @@ export function VoiceAnalysisDashboardCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const configured = VOICE_ANALYSIS_BASE_URL !== "";
   const latest = sessions[0] ?? null;
   const features = latest?.features ?? null;
 
   const load = useCallback(async () => {
-    if (!configured) {
-      setError("Set EXPO_PUBLIC_VOICE_ANALYSIS_URL to show local voice analysis.");
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -76,7 +70,7 @@ export function VoiceAnalysisDashboardCard({
     } finally {
       setLoading(false);
     }
-  }, [configured]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -112,13 +106,12 @@ export function VoiceAnalysisDashboardCard({
   }, [load]);
 
   const status = useMemo(() => {
-    if (!configured) return "Local URL needed";
     if (loading) return "Loading";
     if (error) return "Needs service";
     if (!latest) return "No sessions";
     if (!features) return "Processing";
     return "Ready";
-  }, [configured, error, features, latest, loading]);
+  }, [error, features, latest, loading]);
   const analysisError = latest?.error ?? null;
 
   const onCardPress = () => {
